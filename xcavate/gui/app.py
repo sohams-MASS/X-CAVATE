@@ -30,6 +30,17 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# Session state defaults
+# ---------------------------------------------------------------------------
+
+if "pipeline_result" not in st.session_state:
+    st.session_state.pipeline_result = None
+if "pipeline_config" not in st.session_state:
+    st.session_state.pipeline_config = None
+if "pipeline_output_dir" not in st.session_state:
+    st.session_state.pipeline_output_dir = None
+
+# ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
 
@@ -277,7 +288,12 @@ with st.sidebar:
 
     # -- Advanced --
     with st.expander("Advanced"):
-        custom_gcode = st.toggle("Custom G-code", value=False)
+        custom_gcode = st.toggle(
+            "Custom G-code",
+            value=False,
+            help="Enable to provide custom G-code templates for header, "
+                 "extrusion start/stop, pressure, and dwell sections.",
+        )
         _algo_labels = {
             "DFS": PathfindingAlgorithm.DFS,
             "Sweep Line": PathfindingAlgorithm.SWEEP_LINE,
@@ -368,16 +384,6 @@ def _read_file_bytes(path: Path) -> Optional[bytes]:
     return None
 
 
-def _find_gcode_file(gcode_dir: Path) -> Optional[Path]:
-    """Return the first G-code .txt file found in the gcode directory."""
-    if not gcode_dir.exists():
-        return None
-    for f in sorted(gcode_dir.iterdir()):
-        if f.suffix == ".txt" and f.name.startswith("gcode_"):
-            return f
-    return None
-
-
 def _find_all_gcode_files(gcode_dir: Path) -> list[Path]:
     """Return all G-code .txt files found in the gcode directory."""
     if not gcode_dir.exists():
@@ -413,6 +419,184 @@ _TOTAL_STEPS = 7
 
 
 # ---------------------------------------------------------------------------
+# Custom G-code Template Editor (main area, shown when toggle is on)
+# ---------------------------------------------------------------------------
+
+# Define default placeholder text for all custom G-code fields.
+_PLACEHOLDER = "; Paste your custom G-code here\n"
+
+# Initialise session-state keys for all custom G-code fields so that the
+# text areas survive Streamlit re-runs and the values are accessible even
+# when the Custom G-code toggle is off.
+_CUSTOM_GCODE_FIELDS = {
+    "cg_header":                {"label": "Header code",                       "file": "header_code.txt"},
+    "cg_start_extrusion":       {"label": "Start extrusion",                   "file": "start_extrusion_code.txt"},
+    "cg_stop_extrusion":        {"label": "Stop extrusion",                    "file": "stop_extrusion_code.txt"},
+    "cg_start_extrusion_ph1":   {"label": "Start extrusion \u2014 Printhead 1",   "file": "start_extrusion_code_printhead1.txt"},
+    "cg_start_extrusion_ph2":   {"label": "Start extrusion \u2014 Printhead 2",   "file": "start_extrusion_code_printhead2.txt"},
+    "cg_stop_extrusion_ph1":    {"label": "Stop extrusion \u2014 Printhead 1",    "file": "stop_extrusion_code_printhead1.txt"},
+    "cg_stop_extrusion_ph2":    {"label": "Stop extrusion \u2014 Printhead 2",    "file": "stop_extrusion_code_printhead2.txt"},
+    "cg_active_pressure_ph1":   {"label": "Active pressure \u2014 Printhead 1",   "file": "active_pressure_printhead1.txt"},
+    "cg_active_pressure_ph2":   {"label": "Active pressure \u2014 Printhead 2",   "file": "active_pressure_printhead2.txt"},
+    "cg_rest_pressure_ph1":     {"label": "Resting pressure \u2014 Printhead 1",  "file": "rest_pressure_printhead1.txt"},
+    "cg_rest_pressure_ph2":     {"label": "Resting pressure \u2014 Printhead 2",  "file": "rest_pressure_printhead2.txt"},
+    "cg_dwell":                 {"label": "Dwell code (start / end of pass)",  "file": "dwell_code.txt"},
+}
+
+for _key in _CUSTOM_GCODE_FIELDS:
+    if _key not in st.session_state:
+        st.session_state[_key] = ""
+
+if custom_gcode:
+    st.subheader("Custom G-code Templates")
+    st.caption(
+        "Paste your printer-specific G-code snippets below. These replace "
+        "the default commands for header, extrusion start/stop, pressure "
+        "control, and dwell sections in the final output file."
+    )
+
+    cg_tabs = st.tabs(["Header", "Single Material", "Multimaterial", "Dwell"])
+
+    # --- Tab 1: Header ---
+    with cg_tabs[0]:
+        st.markdown(
+            "Custom G-code for the **header** section of the output file. "
+            "Include any code required for your printer, such as establishing "
+            "connections between external pressure boxes and syringes."
+        )
+        st.session_state["cg_header"] = st.text_area(
+            "Header code",
+            value=st.session_state["cg_header"],
+            height=200,
+            placeholder="; e.g. G28 ; Home all axes\n; M106 S255 ; Fan on",
+            key="ta_cg_header",
+        )
+
+    # --- Tab 2: Single Material ---
+    with cg_tabs[1]:
+        st.markdown(
+            "Custom G-code for **starting** and **stopping** extrusion in "
+            "single-material mode."
+        )
+        sm_cols = st.columns(2)
+        with sm_cols[0]:
+            st.session_state["cg_start_extrusion"] = st.text_area(
+                "Start extrusion",
+                value=st.session_state["cg_start_extrusion"],
+                height=180,
+                placeholder="; G-code to begin extrusion",
+                key="ta_cg_start_extrusion",
+            )
+        with sm_cols[1]:
+            st.session_state["cg_stop_extrusion"] = st.text_area(
+                "Stop extrusion",
+                value=st.session_state["cg_stop_extrusion"],
+                height=180,
+                placeholder="; G-code to stop extrusion",
+                key="ta_cg_stop_extrusion",
+            )
+
+    # --- Tab 3: Multimaterial ---
+    with cg_tabs[2]:
+        st.markdown(
+            "Custom G-code for multimaterial printing. Provide start/stop "
+            "extrusion and active/resting pressure codes for **each printhead**."
+        )
+
+        st.markdown("##### Extrusion Start / Stop")
+        mm_cols_a = st.columns(2)
+        with mm_cols_a[0]:
+            st.session_state["cg_start_extrusion_ph1"] = st.text_area(
+                "Start extrusion \u2014 Printhead 1",
+                value=st.session_state["cg_start_extrusion_ph1"],
+                height=150,
+                placeholder="; Start extrusion PH1",
+                key="ta_cg_start_extrusion_ph1",
+            )
+            st.session_state["cg_stop_extrusion_ph1"] = st.text_area(
+                "Stop extrusion \u2014 Printhead 1",
+                value=st.session_state["cg_stop_extrusion_ph1"],
+                height=150,
+                placeholder="; Stop extrusion PH1",
+                key="ta_cg_stop_extrusion_ph1",
+            )
+        with mm_cols_a[1]:
+            st.session_state["cg_start_extrusion_ph2"] = st.text_area(
+                "Start extrusion \u2014 Printhead 2",
+                value=st.session_state["cg_start_extrusion_ph2"],
+                height=150,
+                placeholder="; Start extrusion PH2",
+                key="ta_cg_start_extrusion_ph2",
+            )
+            st.session_state["cg_stop_extrusion_ph2"] = st.text_area(
+                "Stop extrusion \u2014 Printhead 2",
+                value=st.session_state["cg_stop_extrusion_ph2"],
+                height=150,
+                placeholder="; Stop extrusion PH2",
+                key="ta_cg_stop_extrusion_ph2",
+            )
+
+        st.markdown("##### Pressure Control")
+        mm_cols_b = st.columns(2)
+        with mm_cols_b[0]:
+            st.session_state["cg_active_pressure_ph1"] = st.text_area(
+                "Active pressure \u2014 Printhead 1",
+                value=st.session_state["cg_active_pressure_ph1"],
+                height=150,
+                placeholder="; Active pressure for PH1",
+                key="ta_cg_active_pressure_ph1",
+                help="G-code for the ink extrusion pressure of Printhead 1 "
+                     "when it is the **active** printhead.",
+            )
+            st.session_state["cg_rest_pressure_ph1"] = st.text_area(
+                "Resting pressure \u2014 Printhead 1",
+                value=st.session_state["cg_rest_pressure_ph1"],
+                height=150,
+                placeholder="; Resting pressure for PH1",
+                key="ta_cg_rest_pressure_ph1",
+                help="G-code for the ink extrusion pressure of Printhead 1 "
+                     "when it is the **inactive** printhead.",
+            )
+        with mm_cols_b[1]:
+            st.session_state["cg_active_pressure_ph2"] = st.text_area(
+                "Active pressure \u2014 Printhead 2",
+                value=st.session_state["cg_active_pressure_ph2"],
+                height=150,
+                placeholder="; Active pressure for PH2",
+                key="ta_cg_active_pressure_ph2",
+                help="G-code for the ink extrusion pressure of Printhead 2 "
+                     "when it is the **active** printhead.",
+            )
+            st.session_state["cg_rest_pressure_ph2"] = st.text_area(
+                "Resting pressure \u2014 Printhead 2",
+                value=st.session_state["cg_rest_pressure_ph2"],
+                height=150,
+                placeholder="; Resting pressure for PH2",
+                key="ta_cg_rest_pressure_ph2",
+                help="G-code for the ink extrusion pressure of Printhead 2 "
+                     "when it is the **inactive** printhead.",
+            )
+
+    # --- Tab 4: Dwell ---
+    with cg_tabs[3]:
+        st.markdown(
+            "**Optional.** Incorporating time delays (\"dwells\") at the first "
+            "and last node of each print pass deposits additional ink at each "
+            "junction, improving the connection via a process similar to \"spot "
+            "welding.\""
+        )
+        st.session_state["cg_dwell"] = st.text_area(
+            "Dwell code (applied at start and end of each pass)",
+            value=st.session_state["cg_dwell"],
+            height=200,
+            placeholder="; e.g. G4 P80 ; dwell 80 ms",
+            key="ta_cg_dwell",
+        )
+
+    st.divider()
+
+
+# ---------------------------------------------------------------------------
 # Main area -- run button and results
 # ---------------------------------------------------------------------------
 
@@ -441,16 +625,26 @@ if run_button:
     inletoutlet_path = input_dir / "inletoutlet.txt"
     inletoutlet_path.write_bytes(inletoutlet_upload.getvalue())
 
+    # Write custom G-code templates to temp directory (if enabled)
+    custom_dir = input_dir / "custom"
+    if custom_gcode:
+        custom_dir.mkdir(exist_ok=True)
+        for _key, _meta in _CUSTOM_GCODE_FIELDS.items():
+            content = st.session_state.get(_key, "")
+            if content.strip():
+                (custom_dir / _meta["file"]).write_text(content)
+
     # Build config
     try:
         config = _build_config(network_path, inletoutlet_path, output_dir)
+        # Point custom_gcode_dir to the temp directory where we wrote the files
+        config.custom_gcode_dir = custom_dir
     except Exception as exc:
         st.error(f"Invalid configuration: {exc}")
         st.stop()
 
     # Progress bar and status
     progress_bar = st.progress(0, text="Initializing...")
-    status_text = st.empty()
 
     def _progress_callback(step: int, description: str) -> None:
         """Update the Streamlit progress bar from the pipeline."""
@@ -464,6 +658,11 @@ if run_button:
         result = run_xcavate(config, progress_cb=_progress_callback)
         progress_bar.progress(1.0, text="Complete!")
         st.success("X-CAVATE finished successfully.")
+
+        # Persist results in session state so downloads survive re-runs
+        st.session_state.pipeline_result = result
+        st.session_state.pipeline_config = config
+        st.session_state.pipeline_output_dir = str(output_dir)
     except Exception as exc:
         progress_bar.empty()
         st.error(f"Pipeline failed: {exc}")
@@ -472,13 +671,22 @@ if run_button:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         st.stop()
 
+
+# ---------------------------------------------------------------------------
+# Show results (persisted in session state so downloads work across re-runs)
+# ---------------------------------------------------------------------------
+
+result = st.session_state.pipeline_result
+config_saved = st.session_state.pipeline_config
+
+if result is not None and config_saved is not None:
     # ------------------------------------------------------------------
     # Visualization
     # ------------------------------------------------------------------
     st.divider()
     st.subheader("3D Visualization")
 
-    if config.generate_plots:
+    if config_saved.generate_plots:
         from xcavate.viz.plotting import create_network_plot
 
         # Single-material plot
@@ -520,7 +728,7 @@ if run_button:
     # G-code files
     with dl_cols[0]:
         st.markdown("**G-code**")
-        gcode_files = _find_all_gcode_files(config.gcode_dir)
+        gcode_files = _find_all_gcode_files(config_saved.gcode_dir)
         if gcode_files:
             for gf in gcode_files:
                 data = _read_file_bytes(gf)
@@ -538,7 +746,7 @@ if run_button:
     # Coordinate files
     with dl_cols[1]:
         st.markdown("**Coordinate Files**")
-        coord_files = _find_coordinate_files(config.graph_dir)
+        coord_files = _find_coordinate_files(config_saved.graph_dir)
         if coord_files:
             for cf in coord_files:
                 data = _read_file_bytes(cf)
@@ -556,7 +764,7 @@ if run_button:
     # Changelog
     with dl_cols[2]:
         st.markdown("**Changelog**")
-        changelog_path = config.output_dir / "changelog.txt"
+        changelog_path = config_saved.output_dir / "changelog.txt"
         changelog_data = _read_file_bytes(changelog_path)
         if changelog_data:
             st.download_button(
@@ -568,27 +776,3 @@ if run_button:
             )
         else:
             st.caption("No changelog generated.")
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    # Allow running directly: python xcavate/gui/app.py
-    # Streamlit must be invoked as: streamlit run xcavate/gui/app.py
-    import sys
-
-    try:
-        from streamlit.web.cli import main as st_main
-
-        sys.argv = ["streamlit", "run", __file__]
-        st_main()
-    except ImportError:
-        print(
-            "Streamlit is not installed. Install it with:\n"
-            "  pip install streamlit\n"
-            "Then run:\n"
-            "  streamlit run xcavate/gui/app.py"
-        )
-        sys.exit(1)

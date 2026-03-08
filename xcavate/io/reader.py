@@ -75,8 +75,8 @@ def read_network_file(
                 current_vessel += 1
                 coord_num_dict[current_vessel] = 0
                 continue
-            # Data row -- split on whitespace and convert to float
-            values = [float(v) for v in stripped.split()]
+            # Data row -- split on comma or whitespace and convert to float
+            values = _parse_data_row(stripped)
             coord_rows.append(values)
             coord_num_dict[current_vessel] += 1
 
@@ -140,7 +140,7 @@ def read_inlet_outlet_file(
                 current_section = "outlet"
                 continue
             # Data row
-            values = [float(v) for v in stripped.split()]
+            values = _parse_data_row(stripped)
             if current_section == "inlet":
                 inlet_rows.append(values[:3])
             elif current_section == "outlet":
@@ -155,6 +155,18 @@ def read_inlet_outlet_file(
     inlets = np.array(inlet_rows, dtype=np.float64) if inlet_rows else np.empty((0, 3), dtype=np.float64)
     outlets = np.array(outlet_rows, dtype=np.float64) if outlet_rows else np.empty((0, 3), dtype=np.float64)
     return inlets, outlets
+
+
+def _parse_data_row(text: str) -> list[float]:
+    """Parse a data row that may use commas, whitespace, or both as delimiters.
+
+    Handles formats like:
+      - ``1.0 2.0 3.0``           (whitespace-separated)
+      - ``1.0, 2.0, 3.0``        (comma-separated)
+      - ``1.0,2.0,3.0``          (comma-only, no spaces)
+    """
+    # Replace commas with spaces, then split on whitespace
+    return [float(v) for v in text.replace(",", " ").split()]
 
 
 def preprocess_coordinates(
@@ -218,15 +230,15 @@ def match_inlet_outlet_nodes(
     points: NDArray[np.float64],
     inlets: NDArray[np.float64],
     outlets: NDArray[np.float64],
-    tolerance: float = 1e-6,
+    warn_threshold: float = 5.0,
 ) -> tuple[list[int], list[int]]:
     """Find the network node indices closest to each inlet and outlet.
 
-    The original code (lines 307-323) used exact float comparison with
-    triple-nested ``if`` statements.  This implementation builds a
-    ``scipy.spatial.cKDTree`` over the network xyz coordinates and queries
-    it once for all inlets and outlets, giving O(N log N + K log N) time
-    instead of O(N * K).
+    Uses nearest-neighbor matching via ``scipy.spatial.cKDTree``.  Inlet and
+    outlet coordinates from SimVascular are often approximate (e.g. face
+    centers rather than exact centerline points), so this function always
+    matches to the closest network point and logs a warning when the distance
+    exceeds *warn_threshold*.
 
     Parameters
     ----------
@@ -237,9 +249,9 @@ def match_inlet_outlet_nodes(
         Inlet coordinates to locate in the network.
     outlets : ndarray, shape (O, 3)
         Outlet coordinates to locate in the network.
-    tolerance : float, optional
-        Maximum Euclidean distance for a match to be accepted.  Defaults
-        to 1e-6 (effectively requiring near-exact matches after rounding).
+    warn_threshold : float, optional
+        Log a warning when the match distance exceeds this value.  Defaults
+        to 5.0 (units of the coordinate system).
 
     Returns
     -------
@@ -247,39 +259,40 @@ def match_inlet_outlet_nodes(
         Indices into *points* for each inlet.
     outlet_nodes : list[int]
         Indices into *points* for each outlet.
-
-    Raises
-    ------
-    ValueError
-        If any inlet or outlet coordinate cannot be matched within
-        *tolerance*.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     # Build a KD-tree using only the spatial (xyz) columns.
     xyz = points[:, :3]
     tree = cKDTree(xyz)
 
-    inlet_nodes: list[int] = []
-    if inlets.size > 0:
-        distances, indices = tree.query(inlets)
+    def _match(coords, label):
+        nodes = []
+        if coords.size == 0:
+            return nodes
+        distances, indices = tree.query(coords)
+        # Handle single-point case (query returns scalars)
+        if distances.ndim == 0:
+            distances = np.array([float(distances)])
+            indices = np.array([int(indices)])
         for i, (dist, idx) in enumerate(zip(distances, indices)):
-            if dist > tolerance:
-                raise ValueError(
-                    f"Inlet {i} at {inlets[i]} could not be matched in the "
-                    f"network (nearest point distance = {dist:.2e}, "
-                    f"tolerance = {tolerance:.2e})."
+            idx = int(idx)
+            if dist > warn_threshold:
+                logger.warning(
+                    "%s %d at %s matched to node %d (dist=%.2f) — "
+                    "coordinates may be approximate",
+                    label, i, coords[i], idx, dist,
                 )
-            inlet_nodes.append(int(idx))
+            else:
+                logger.info(
+                    "%s %d matched to node %d (dist=%.4f)",
+                    label, i, idx, dist,
+                )
+            nodes.append(idx)
+        return nodes
 
-    outlet_nodes: list[int] = []
-    if outlets.size > 0:
-        distances, indices = tree.query(outlets)
-        for i, (dist, idx) in enumerate(zip(distances, indices)):
-            if dist > tolerance:
-                raise ValueError(
-                    f"Outlet {i} at {outlets[i]} could not be matched in the "
-                    f"network (nearest point distance = {dist:.2e}, "
-                    f"tolerance = {tolerance:.2e})."
-                )
-            outlet_nodes.append(int(idx))
+    inlet_nodes = _match(inlets, "Inlet")
+    outlet_nodes = _match(outlets, "Outlet")
 
     return inlet_nodes, outlet_nodes

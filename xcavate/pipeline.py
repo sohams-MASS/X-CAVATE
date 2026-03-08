@@ -144,8 +144,9 @@ def run_xcavate(
     # Write diagnostic files
     write_special_nodes(
         str(config.graph_dir / "special_nodes.txt"),
-        inlet_nodes, outlet_nodes, endpoint_nodes,
-        list(branch_dict.keys()), branchpoint_list,
+        branch_dict, branchpoint_list, endpoint_nodes,
+        inlet_nodes, outlet_nodes,
+        branchpoint_daughter_dict, repeat_daughters,
     )
     write_graph(str(config.graph_dir / "graph.txt"), graph)
 
@@ -322,6 +323,10 @@ def run_xcavate(
 
 def _create_gcode_writer(config: XcavateConfig, custom_codes):
     """Instantiate the appropriate G-code writer for the configured printer."""
+    from xcavate.io.gcode.pressure import PressureGcodeWriter
+    from xcavate.io.gcode.positive_ink import PositiveInkGcodeWriter
+    from xcavate.io.gcode.aerotech import AerotechGcodeWriter
+
     if config.printer_type == PrinterType.PRESSURE:
         return PressureGcodeWriter(config, custom_codes)
     elif config.printer_type == PrinterType.POSITIVE_INK:

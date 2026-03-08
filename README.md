@@ -1,219 +1,735 @@
-# About
+# X-CAVATE
 
-X-CAVATE is an algorithm for converting vascular network geometries into collision-free 3D printer toolhead pathways.
+Convert vascular network geometries (e.g. from SimVascular) into collision-free 3D printer toolhead pathways and G-code.
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Installation](#installation)
+- [Input Files](#input-files)
+- [Running X-CAVATE](#running-x-cavate)
+  - [Mode 1: Streamlit GUI](#mode-1-streamlit-gui-recommended-for-new-users)
+  - [Mode 2: Command-Line Interface](#mode-2-command-line-interface)
+  - [Mode 3: Docker](#mode-3-docker)
+- [Python API](#python-api)
+- [Parameters Reference](#parameters-reference)
+- [Output Files](#output-files)
+- [Project Structure](#project-structure)
+- [Development](#development)
+- [License](#license)
+
+---
+
+## Overview
 
 X-CAVATE accepts an input list of coordinates (in cm) specifying the b-splines constituting a vascular network. It reorders the coordinates such that they can be printed, from start to finish, to fabricate the network without collisions between the printhead nozzle and deposited ink.
 
-# Getting Started
+The pipeline performs seven steps:
+
+| Step | Description |
+|------|-------------|
+| 1 | Read and preprocess network geometry |
+| 2 | Interpolate to nozzle-radius resolution |
+| 3 | Build the vascular adjacency graph |
+| 4 | Generate collision-free print passes (DFS or Sweep Line) |
+| 5 | Subdivide, gap-close, downsample, overlap, and reorder passes |
+| 6 | (Optional) Multimaterial arterial/venous splitting |
+| 7 | Write coordinate outputs, plots, and G-code |
+
+**Key improvements over the original monolithic script:**
+- KD-tree spatial indexing for collision detection (100-1000x speedup)
+- Batch interpolation (10-50x speedup)
+- Modular codebase (~1,300 lines across focused modules vs. ~11,200 lines)
+- Multiple pathfinding algorithms (DFS + Sweep Line)
+- Web GUI for non-technical users
+- pip installable + Docker deployable
+
+---
+
+## Installation
+
+**Requirements:** Python 3.9+
+
+### Option A: pip install
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/X-CAVATE.git
+cd X-CAVATE
+
+# Install core package (CLI only)
+pip install .
+
+# Install with GUI support (adds Streamlit)
+pip install ".[gui]"
+
+# Install with development tools (adds pytest, ruff)
+pip install ".[dev]"
+
+# Install everything
+pip install ".[all]"
+```
+
+### Option B: Development mode
+
+```bash
+pip install -e ".[all]"
+```
+
+### Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| numpy | >= 1.21 | Array operations |
+| pandas | >= 1.3 | Data handling |
+| scipy | >= 1.7 | KD-tree spatial indexing, interpolation |
+| plotly | >= 5.0 | Interactive 3D visualization |
+| streamlit | >= 1.20 | Web GUI *(optional, installed with `[gui]`)* |
+
+---
 
 ## Input Files
 
-### Custom Files
+X-CAVATE requires two input text files. Both support whitespace-separated, comma-separated, or mixed delimiter formats.
 
-X-CAVATE contains multiple input file types to assist with integration into the user's specific printer hardware and software.
+### 1. Network File
 
-These files are contained within the "inputs/custom" folder, and must be updated with the user's specific code prior to running x-cavate.
+Contains vessel coordinates exported from SimVascular. Each vessel has a header line followed by coordinate rows.
 
-| File | Description |
-| ----------- | ----------- |
-| header_code.txt | Custom g-code for header |
-| start_extrusion_code.txt | Custom g-code for starting extrusion and dwelling (single material) |
-| stop_extrusion_code.txt | Custom g-code for stopping extrusion and dwelling (single material) |
-| start_extrusion_printhead1.txt | Custom g-code for starting extrusion of printhead 1 and dwelling (multimaterial) |
-| start_extrusion_printhead2.txt | Custom g-code for starting extrusion of printhead 2 and dwelling (multimaterial) |
-| stop_extrusion_printhead1.txt | Custom g-code for stopping extrusion of printhead 1 and dwelling (multimaterial) |
-| stop_extrusion_printhead2.txt | Custom g-code for stopping extrusion of printhead 2 and dwelling (multimaterial) |
-| active_pressure_printhead1.txt | Custom g-code for setting the pressure for extrusion when printhead 1 is the active nozzle |
-| active_pressure_printhead2.txt | Custom g-code for setting the pressure for extrusion when printhead 2 is the active nozzle |
-| rest_pressure_printhead1.txt | Custom g-code for setting the resting pressure for extrusion when printhead 1 is the resting nozzle |
-| rest_pressure_printhead2.txt | Custom g-code for setting the resting pressure for extrusion when printhead 2 is the resting nozzle |
+```
+Vessel: 0, Number of Points: 100
+33.4878, 0.0000, 53.5303, 0.0200
+33.4115, -0.5285, 52.7311, 0.0200
+...
+Vessel: 1, Number of Points: 100
+15.0600, -37.3300, 11.6600, 0.0190
+...
+```
 
-The local folder setup appears as follows:
+**Columns:**
 
-<img width="589" height="259" alt="xcavate_setup" src="https://github.com/user-attachments/assets/bb1b77cf-ad49-4c33-9056-680e25a7ac44" />
+| Column | Required | Description |
+|--------|----------|-------------|
+| 1-3 | Yes | x, y, z coordinates (in cm) |
+| 4 | No | Vessel radius (for speed calculation) |
+| 5 | No | Arterial/venous flag: 0 = venous, any other number = arterial |
 
-## Required Format
+**Constraints:**
+- Bifurcation points ("branchpoints") must exist ON the vessel from which they branch
+- Recommended: limit to 100 coordinates/vessel to avoid long runtimes
+- Coordinates should be in centimeters (X-CAVATE converts to mm internally)
 
-To print with specified filament radii, add the radius to each coordinate within the fourth column of the VascularNetwork.txt file ONLY (not the inlet/outlet file), as shown below.
+### 2. Inlet/Outlet File
 
-To print with two inks ("arterial" and "venous"), specify the ink for each coordinate in the fifth column of the VascularNetwork.txt file ONLY (not the inlet/outlet file).
+Specifies which network locations are inlets (where printing starts) and outlets. Each section starts with the keyword `inlet` or `outlet` on its own line, followed by one or more coordinate triplets.
 
-Use 0 to specify "venous" and use any other number (not 0) to specify "arterial."
+```
+inlet
+21.97, -15.43, 50.00
+11.81, 0.00, 21.34
+outlet
+36.05, -27.19, 50.00
+50.00, 0.00, 26.54
+```
 
-## Constraints
+You can have any number of inlets and outlets. Coordinates are matched to the nearest network point automatically (approximate matching is supported).
 
-The inlet/outlet coordinates MUST:
-1. Also appear as coordinates within the vascular network .txt file
-2. Exactly match the way they appear (i.e., same number of digits displayed after the decimal place) in the VascularNetwork.txt file
+### 3. Custom G-code Template Files (Optional)
 
-Bifurcation points ("branchpoints") MUST:
-1. Exist ON the line from which they branch
+Custom G-code templates let you adapt X-CAVATE's output to your specific printer hardware and software. Each template file contains a G-code snippet that is inserted at a specific point in the final output. The template files are located in `inputs/custom/` and ship with placeholder text that you replace with your own G-code.
 
-To avoid long runtimes, it is highly recommended to limit the number of coordinates per vessel within the input VascularNetwork.txt file to no more than 100 coordinates/vessel.
+There are 12 template files organized into four categories:
 
-# Required Parameters
+**Header** (applies to all prints):
 
-## Nozzle Dimensions
+| File | Purpose |
+|------|---------|
+| `header_code.txt` | G-code header: printer initialization, establishing connections between external pressure boxes and syringes, homing, etc. |
 
-Provide the nozzle outer diameter (mm). X-CAVATE will assume an infinite length for the nozzle, meaning that it will only account for collisions with the nozzle itself, rather than with the printhead holding the syringe.
+**Single Material** (used when `--multimaterial 0`):
 
-Nordson provides a list of nozzle dimensions here: https://www.nordson.com/en/products/efd-products/general-purpose-dispense-tips
+| File | Purpose |
+|------|---------|
+| `start_extrusion_code.txt` | G-code to start extrusion at the beginning of each print pass |
+| `stop_extrusion_code.txt` | G-code to stop extrusion at the end of each print pass |
 
-## Multi-material (Arterial and Venous)
+**Multimaterial** (used when `--multimaterial 1`):
 
-To generate g-code for a network which distinguishes between arterial and venous vessels, turn on the "multimaterial" option by specifying "1" for the --multimaterial option in the command line. To turn off the multimaterial feature, specify "0" in the command line.
+| File | Purpose |
+|------|---------|
+| `start_extrusion_code_printhead1.txt` | Start extrusion for Printhead 1 (arterial) |
+| `start_extrusion_code_printhead2.txt` | Start extrusion for Printhead 2 (venous) |
+| `stop_extrusion_code_printhead1.txt` | Stop extrusion for Printhead 1 (arterial) |
+| `stop_extrusion_code_printhead2.txt` | Stop extrusion for Printhead 2 (venous) |
+| `active_pressure_printhead1.txt` | Set ink extrusion pressure when Printhead 1 is the **active** printhead |
+| `active_pressure_printhead2.txt` | Set ink extrusion pressure when Printhead 2 is the **active** printhead |
+| `rest_pressure_printhead1.txt` | Set ink extrusion pressure when Printhead 1 is the **inactive** printhead |
+| `rest_pressure_printhead2.txt` | Set ink extrusion pressure when Printhead 2 is the **inactive** printhead |
 
-## Custom G-code
+**Dwell** (optional, applies to all prints):
 
-Users must specify at the command line whether they are including custom g-code for adaptation to their own printer hardware/software. Without custom g-code, X-CAVATE defaults to multimaterial g-code formatted for the Aerotech 6-axis motion controller and single-material g-code formatted for 
+| File | Purpose |
+|------|---------|
+| `dwell_code.txt` | Time delay ("dwell") at the start and end of each print pass. Deposits extra ink at junctions, improving connections via a process similar to "spot welding." |
 
-## Type of Printing (Extrusion- vs Pressure-Based)
+**Example template content** (`start_extrusion_code.txt`):
 
-X-CAVATE allows printing with either extrusion-based or pressure-based 3D printers. To specify which type of printer you have, use the `--printer_type` parameter.
+```gcode
+; Begin extrusion
+M42 P0 S255     ; Open valve
+G4 P80          ; Dwell 80ms for pressure build-up
+```
 
-Pressure-based printers require specification of active and resting pressures. Extrusion-based printers do not.
+> Each file can contain multiple lines. Any file that does not exist or is empty is simply skipped.
 
-# Optional Parameters
+### 4. Gap Extension Files (Optional)
 
-## Gap Closure
+For manual gap closure, place in `inputs/extension/`:
+- `pass_to_extend_SM.txt` / `pass_to_extend_MM.txt` — pass indices to extend
+- `deltas_to_extend_SM.txt` / `deltas_to_extend_MM.txt` — delta x, y, z per pass (mm)
 
-X-CAVATE has two features for optimizing closure of gaps which may emerge at print pass junctions:
+---
 
-**1. Nodal Overlap**
-Using the `--numOverlap` feature, users can optionally specify a number of nodes by which to overlap the end of a print pass with the previously-printed pass to which it connects. If there are fewer than the specified number of nodes in the existing pass, x-cavate will retrace the entire existing pass.
+## Running X-CAVATE
 
-**2. Segment Extension**
-Using the `pass_to_extend` .txt file, users can specify which print passes to extend. Using the `deltas_to_extend` .txt file, users can specify the distance, in mm, by which to extend the _x_-, _y_-, and _z_-coordinates. The `_SM` extension is the file for extending single material passes, and the `_MM` extension is for multimaterial.
+### Mode 1: Streamlit GUI (Recommended for New Users)
 
-<img width="555" height="77" alt="image" src="https://github.com/user-attachments/assets/00b3502b-892d-4684-8624-e76d3d15a8b2" />
+The web-based GUI is the easiest way to run X-CAVATE. No coding required.
 
+**Start the server:**
 
-**3. Resting Pressure**
-To avoid drying of the ink within the inactive nozzle during multimaterial pressure-based printing (note: this parameter does _not_ apply to extrusion-based printing), users can extrude ink through the inactive nozzle by specifying `--resting_pressure` > 0. This is particularly relevant for working with nozzles with small inner diameters, in which ink is much more likely to rapidly dry. By default, the value of `--resting_pressure` is 0 psi, meaning that the inactive nozzle will not extrude any ink. 
+```bash
+streamlit run xcavate/gui/app.py
+```
 
-## Tolerancing
+This opens a browser at **http://localhost:8501** with:
 
-Branchpoints represent sites in the vascular network which are particularly prone to nozzle collisions with already-printed ink. This is because the branchpoints tend to contain many coordinates which are spaced closely together. In X-CAVATE, it is possible to "override" points of detected collision by introducing a "tolerance" value. The tolerance value replaces the nozzle outer diameter as the dimension used to detect potential collisions such that any neighboring coordinate A within the "tolerance" for printed coordinate B will be printed within the same print pass as coordinate B, even if the printing of coordinate A introduces a collision with coordinate B.
+- **Sidebar** — File upload widgets and all configurable parameters in expandable sections
+- **Main area** — Run button, progress bar (7 steps), interactive 3D plot, download buttons
 
-If no tolerance value is specified by the user, X-CAVATE will default to generating paths without any tolerance (0).
+**Steps:**
 
-## Padding
+1. Upload your **Network file** and **Inlet/Outlet file** in the sidebar
+2. Set **Required Parameters**: nozzle diameter, container height, decimal places, amount up
+3. Choose a **Printer type** (Pressure, Positive Ink, or Aerotech)
+4. (Optional) Expand optional sections to fine-tune: tolerancing, print speeds, geometry, downsampling, multimaterial, positive ink displacement, advanced
+5. (Optional) Enable **Custom G-code** in the Advanced section to reveal the template editor (see below)
+6. Click **Run X-CAVATE**
+7. Watch the progress bar as the pipeline runs through all 7 steps
+8. View the interactive 3D plot of your print passes
+9. Download G-code, coordinate files, and changelog
 
-If the user does not specify padding, X-CAVATE will default to generating paths without any padding (0).
+**Custom G-code in the GUI:**
+
+When you enable the "Custom G-code" toggle in the sidebar's Advanced section, a tabbed editor appears in the main area with four tabs:
+
+| Tab | What to paste |
+|-----|---------------|
+| **Header** | Printer initialization code (pressure box connections, homing, etc.) |
+| **Single Material** | Start/stop extrusion code for single-nozzle prints |
+| **Multimaterial** | Start/stop extrusion + active/resting pressure for each printhead (8 fields in a 2-column layout) |
+| **Dwell** | Optional time-delay code for "spot welding" at pass junctions |
+
+Paste your printer-specific G-code into each text area. The snippets are saved automatically and persist across page re-runs. When you click **Run X-CAVATE**, they are injected into the appropriate sections of the final G-code output.
+
+**Troubleshooting:**
+- If you see `Runtime instance already exists`, kill stale processes: `pkill -f streamlit` then restart
+- If download buttons disappear after clicking, update to the latest version (this has been fixed)
+
+---
+
+### Mode 2: Command-Line Interface
+
+After `pip install .`, the `xcavate` command is available system-wide. You can also use `python -m xcavate`.
+
+**Minimal example:**
+
+```bash
+xcavate \
+  --network_file inputs/network.txt \
+  --inletoutlet_file inputs/inletoutlet.txt \
+  --nozzle_diameter 0.5 \
+  --container_height 10.0 \
+  --num_decimals 3 \
+  --amount_up 10.0 \
+  --printer_type 0 \
+  --multimaterial 0 \
+  --tolerance_flag 0 \
+  --speed_calc 0 \
+  --plots 1 \
+  --downsample 0 \
+  --custom 0
+```
+
+**Or equivalently:**
+
+```bash
+python -m xcavate \
+  --network_file inputs/network.txt \
+  --inletoutlet_file inputs/inletoutlet.txt \
+  --nozzle_diameter 0.5 \
+  --container_height 10.0 \
+  --num_decimals 3 \
+  --amount_up 10.0 \
+  --printer_type 0 \
+  --multimaterial 0 \
+  --tolerance_flag 0 \
+  --speed_calc 0 \
+  --plots 1 \
+  --downsample 0 \
+  --custom 0
+```
+
+**Custom G-code in CLI mode:**
+
+When using `--custom 1`, the CLI reads template files from the `inputs/custom/` directory (relative to where you run the command). Set up the templates before running:
+
+```bash
+# 1. Edit the template files with your printer-specific G-code
+nano inputs/custom/header_code.txt
+nano inputs/custom/start_extrusion_code.txt
+nano inputs/custom/stop_extrusion_code.txt
+
+# 2. For multimaterial, also edit:
+nano inputs/custom/start_extrusion_code_printhead1.txt
+nano inputs/custom/start_extrusion_code_printhead2.txt
+nano inputs/custom/stop_extrusion_code_printhead1.txt
+nano inputs/custom/stop_extrusion_code_printhead2.txt
+nano inputs/custom/active_pressure_printhead1.txt
+nano inputs/custom/active_pressure_printhead2.txt
+nano inputs/custom/rest_pressure_printhead1.txt
+nano inputs/custom/rest_pressure_printhead2.txt
+
+# 3. Optional: dwell code for "spot welding" at junctions
+nano inputs/custom/dwell_code.txt
+
+# 4. Run with --custom 1
+xcavate \
+  --network_file inputs/network.txt \
+  --inletoutlet_file inputs/inletoutlet.txt \
+  --nozzle_diameter 0.5 \
+  --container_height 10.0 \
+  --num_decimals 3 \
+  --amount_up 10.0 \
+  --printer_type 0 \
+  --multimaterial 0 \
+  --tolerance_flag 0 \
+  --speed_calc 0 \
+  --plots 1 \
+  --downsample 0 \
+  --custom 1
+```
+
+Any template file that does not exist or is empty is simply skipped. See [Custom G-code Template Files](#3-custom-g-code-template-files-optional) for the full file list and what each one does.
+
+**Full example with all optional flags:**
+
+```bash
+xcavate \
+  --network_file inputs/new_splines.txt \
+  --inletoutlet_file inputs/inletoutlet.txt \
+  --nozzle_diameter 0.5 \
+  --container_height 10.0 \
+  --num_decimals 5 \
+  --amount_up 10.0 \
+  --printer_type 0 \
+  --multimaterial 1 \
+  --tolerance_flag 0 \
+  --speed_calc 1 \
+  --plots 1 \
+  --downsample 0 \
+  --custom 1 \
+  --algorithm sweep_line \
+  --output_dir my_output \
+  --scale_factor 1.0 \
+  --print_speed 2.0 \
+  --flow 0.127 \
+  --jog_speed 5.0 \
+  --jog_speed_lift 0.25 \
+  --initial_lift 0.5 \
+  --dwell_start 0.08 \
+  --dwell_end 0.08 \
+  --container_x 50.0 \
+  --container_y 50.0 \
+  --top_padding 0.0 \
+  --num_overlap 2 \
+  --offset_x 103.0 \
+  --offset_y 0.5 \
+  --front_nozzle 1 \
+  --resting_pressure 0.0 \
+  --active_pressure 5.0
+```
+
+---
+
+### Mode 3: Docker
+
+Run X-CAVATE in a Docker container with the Streamlit GUI — no Python installation needed on the host machine.
+
+**Build the image:**
+
+```bash
+docker build -t xcavate .
+```
+
+**Run the container:**
+
+```bash
+docker run -p 8501:8501 xcavate
+```
+
+Then open **http://localhost:8501** in your browser.
+
+**Mount a local directory** to access output files on your host machine:
+
+```bash
+docker run -p 8501:8501 -v $(pwd)/outputs:/app/outputs xcavate
+```
+
+**Custom G-code in Docker:**
+
+You have two options for custom G-code in Docker:
+
+*Option A: Use the GUI editor* — Enable the "Custom G-code" toggle in the web interface and paste your snippets directly into the text areas. No volume mounting needed.
+
+*Option B: Mount pre-written template files* — If you already have your template files on the host, mount them into the container:
+
+```bash
+docker run -p 8501:8501 \
+  -v $(pwd)/inputs/custom:/app/inputs/custom \
+  -v $(pwd)/outputs:/app/outputs \
+  xcavate
+```
+
+Then enable "Custom G-code" in the GUI. The pipeline will read the mounted files. This is useful for sharing a consistent set of templates across your team.
+
+**Health check:**
+
+The container includes a health check endpoint at `http://localhost:8501/_stcore/health`.
+
+---
+
+## Python API
+
+You can use X-CAVATE as a Python library in your own scripts or notebooks:
+
+**Basic usage:**
+
+```python
+from xcavate.config import XcavateConfig, PrinterType, PathfindingAlgorithm
+from xcavate.pipeline import run_xcavate
+
+config = XcavateConfig(
+    network_file="inputs/network.txt",
+    inletoutlet_file="inputs/inletoutlet.txt",
+    nozzle_diameter=0.5,
+    container_height=10.0,
+    num_decimals=3,
+    printer_type=PrinterType.PRESSURE,
+    algorithm=PathfindingAlgorithm.DFS,
+)
+
+# Optional: track progress
+def on_progress(step, description):
+    print(f"Step {step}/7: {description}")
+
+result = run_xcavate(config, progress_cb=on_progress)
+
+# Access results
+print(f"Generated {len(result['print_passes_sm'])} single-material passes")
+
+# result keys:
+#   "print_passes_sm"  - Single-material print passes (dict)
+#   "print_passes_mm"  - Multimaterial passes (dict or None)
+#   "points"           - Interpolated coordinate array (ndarray)
+#   "changelog"        - Gap closure changelog (list of strings)
+#   "speed_map_sm"     - Speed map for SM (dict or None)
+#   "speed_map_mm"     - Speed map for MM (dict or None)
+#   "material_map"     - Material classification (dict or None)
+```
+
+**With custom G-code templates:**
+
+```python
+from pathlib import Path
+from xcavate.config import XcavateConfig, PrinterType
+from xcavate.pipeline import run_xcavate
+
+config = XcavateConfig(
+    network_file="inputs/network.txt",
+    inletoutlet_file="inputs/inletoutlet.txt",
+    nozzle_diameter=0.5,
+    container_height=10.0,
+    num_decimals=3,
+    printer_type=PrinterType.PRESSURE,
+    # Enable custom G-code and point to the template directory
+    custom_gcode=True,
+    custom_gcode_dir=Path("inputs/custom"),
+)
+
+result = run_xcavate(config)
+```
+
+The pipeline loads all `.txt` template files from `custom_gcode_dir`. Any missing file is silently skipped (its section in the output will use the printer's default commands instead).
+
+---
+
+## Parameters Reference
+
+### Required Parameters
+
+| Parameter | CLI Flag | Description |
+|-----------|----------|-------------|
+| `network_file` | `--network_file` | Path to network coordinates .txt file |
+| `inletoutlet_file` | `--inletoutlet_file` | Path to inlet/outlet coordinates .txt file |
+| `nozzle_diameter` | `--nozzle_diameter` | Nozzle outer diameter in mm |
+| `container_height` | `--container_height` | Print container height in mm |
+| `num_decimals` | `--num_decimals` | Decimal places for output rounding |
+| `amount_up` | `--amount_up` | Z-raise above container between passes (mm). Default: 10 |
+| `printer_type` | `--printer_type` | 0 = Pressure, 1 = Positive Ink, 2 = Aerotech |
+| `multimaterial` | `--multimaterial` | 0 = off, 1 = on |
+| `tolerance_flag` | `--tolerance_flag` | 0 = off, 1 = on |
+| `speed_calc` | `--speed_calc` | Compute varying print speeds? 0 = off, 1 = on |
+| `plots` | `--plots` | Generate 3D plots? 0 = off, 1 = on |
+| `downsample` | `--downsample` | Downsample interpolated network? 0 = off, 1 = on |
+| `custom` | `--custom` | Use custom G-code templates? 0 = off, 1 = on |
+
+### Optional Parameters
+
+| Parameter | CLI Flag | Default | Description |
+|-----------|----------|---------|-------------|
+| `algorithm` | `--algorithm` | `dfs` | Pathfinding: `dfs` or `sweep_line` |
+| `output_dir` | `--output_dir` | `outputs` | Output directory path |
+| `tolerance` | `--tolerance` | 0 | Tolerance amount (mm) |
+| `scale_factor` | `--scale_factor` | 1.0 | Network scale multiplier |
+| `container_x` | `--container_x` | 50.0 | Container x-dimension (mm) |
+| `container_y` | `--container_y` | 50.0 | Container y-dimension (mm) |
+| `top_padding` | `--top_padding` | 0.0 | Padding above max z (mm) |
+| `downsample_factor` | `--downsample_factor` | 1 | Downsample factor (integer) |
+| `flow` | `--flow` | 0.127 | Volumetric flow rate (mm^3/s) |
+| `print_speed` | `--print_speed` | 1.0 | Print speed / feed rate (mm/s) |
+| `jog_speed` | `--jog_speed` | 5.0 | Jog speed (mm/s) |
+| `jog_speed_lift` | `--jog_speed_lift` | 0.25 | Z-lift jog speed (mm/s) |
+| `jog_translation` | `--jog_translation` | 10.0 | Nozzle-to-nozzle jog speed (mm/s) |
+| `initial_lift` | `--initial_lift` | 0.5 | Initial lift distance (mm) |
+| `dwell_start` | `--dwell_start` | 0.08 | Dwell at pass start (s) |
+| `dwell_end` | `--dwell_end` | 0.08 | Dwell at pass end (s) |
+| `num_overlap` | `--num_overlap` | 0 | Overlap nodes for gap closure |
+| `close_sm` | `--close_sm` | 0 | Gap extension file for SM? 0/1 |
+| `close_mm` | `--close_mm` | 0 | Gap extension file for MM? 0/1 |
+
+### Multimaterial Parameters
+
+| Parameter | CLI Flag | Default | Description |
+|-----------|----------|---------|-------------|
+| `offset_x` | `--offset_x` | 103.0 | Printhead X offset (mm) |
+| `offset_y` | `--offset_y` | 0.5 | Printhead Y offset (mm) |
+| `front_nozzle` | `--front_nozzle` | 1 | 1 = venous in front, 2 = behind |
+| `printhead_1` | `--printhead_1` | Aa | Arterial printhead name |
+| `printhead_2` | `--printhead_2` | Ab | Venous printhead name |
+| `axis_1` | `--axis_1` | A | Arterial z-axis name |
+| `axis_2` | `--axis_2` | B | Venous z-axis name |
+| `resting_pressure` | `--resting_pressure` | 0.0 | Inactive nozzle pressure (psi) |
+| `active_pressure` | `--active_pressure` | 5.0 | Active nozzle pressure (psi) |
+
+### Positive Ink Displacement Parameters
+
+| Parameter | CLI Flag | Default | Description |
+|-----------|----------|---------|-------------|
+| `positiveInk_start` | `--positiveInk_start` | 0.0 | Extrusion start value |
+| `positiveInk_end` | `--positiveInk_end` | 0.0 | Extrusion stop value |
+| `positiveInk_radii` | `--positiveInk_radii` | 0 | Use vessel radii? 0/1 |
+| `positiveInk_diam` | `--positiveInk_diam` | 1.0 | Vessel diameter (mm) |
+| `positiveInk_syringe_diam` | `--positiveInk_syringe_diam` | 1.0 | Syringe diameter (mm) |
+| `positiveInk_factor` | `--positiveInk_factor` | 1.0 | Extrusion multiplier |
+| `positiveInk_start_arterial` | `--positiveInk_start_arterial` | 0.0 | Arterial start value |
+| `positiveInk_start_venous` | `--positiveInk_start_venous` | 0.0 | Venous start value |
+| `positiveInk_end_arterial` | `--positiveInk_end_arterial` | 0.0 | Arterial end value |
+| `positiveInk_end_venous` | `--positiveInk_end_venous` | 0.0 | Venous end value |
+
+### Printer Types
+
+| Value | Name | Description |
+|-------|------|-------------|
+| 0 | Pressure | Standard pressure-based extrusion |
+| 1 | Positive Ink | Positive ink displacement |
+| 2 | Aerotech | Aerotech 6-axis motion controller |
+
+### Pathfinding Algorithms
+
+| Name | CLI Value | Description |
+|------|-----------|-------------|
+| DFS | `dfs` | Depth-first search from lowest unvisited node with KD-tree collision detection. Default. |
+| Sweep Line | `sweep_line` | Sort by z, trace upward. Naturally collision-free for upward printing. May produce fewer, longer passes. |
+
+---
+
+## Output Files
+
+All output is written to the output directory (default: `outputs/`):
+
+```
+outputs/
+├── graph/
+│   ├── graph.txt               # Adjacency graph
+│   ├── special_nodes.txt       # Branchpoints, endpoints, inlets, outlets
+│   ├── SM_x_coords.txt         # Single-material x coordinates per pass
+│   ├── SM_y_coords.txt         # Single-material y coordinates per pass
+│   ├── SM_z_coords.txt         # Single-material z coordinates per pass
+│   ├── SM_combined.txt         # Combined xyz per pass
+│   ├── MM_*.txt                # Multimaterial equivalents (if enabled)
+│   └── ...
+├── gcode/
+│   ├── gcode_SM_pressure.txt   # Single-material G-code
+│   └── gcode_MM_pressure.txt   # Multimaterial G-code (if enabled)
+├── plots/
+│   ├── network_SM.html         # Interactive 3D plot (single material)
+│   └── network_MM.html         # Interactive 3D plot (multimaterial)
+└── changelog.txt               # Gap closure operations log
+```
+
+---
+
+## Project Structure
+
+```
+X-CAVATE/
+├── xcavate/
+│   ├── __init__.py
+│   ├── __main__.py              # python -m xcavate entry point
+│   ├── cli.py                   # Command-line argument parsing
+│   ├── config.py                # XcavateConfig dataclass + enums
+│   ├── pipeline.py              # 7-step pipeline orchestrator
+│   │
+│   ├── core/                    # Core algorithms
+│   │   ├── preprocessing.py     # Batch interpolation (O(n) vs original O(n^2))
+│   │   ├── graph.py             # Graph construction + KD-tree branchpoint detection
+│   │   ├── pathfinding.py       # DFS + Sweep Line with KD-tree collision detection
+│   │   ├── gap_closure.py       # Unified gap closure pipeline
+│   │   ├── postprocessing.py    # Subdivision, downsampling, overlap, reordering
+│   │   └── multimaterial.py     # Arterial/venous classification
+│   │
+│   ├── io/                      # Input/output
+│   │   ├── reader.py            # Network + inlet/outlet file parsing
+│   │   ├── writer.py            # Coordinate output files
+│   │   └── gcode/               # G-code generation
+│   │       ├── base.py          # Abstract writer + custom code templates
+│   │       ├── pressure.py      # Pressure printer G-code
+│   │       ├── positive_ink.py  # Positive ink displacement G-code
+│   │       └── aerotech.py      # Aerotech 6-axis G-code
+│   │
+│   ├── spatial/
+│   │   └── index.py             # KD-tree spatial indexing wrapper
+│   │
+│   ├── viz/
+│   │   └── plotting.py          # Plotly 3D visualization
+│   │
+│   ├── gui/
+│   │   └── app.py               # Streamlit web interface
+│   │
+│   └── calibration/
+│       └── __init__.py          # Calibration utilities (reuses core modules)
+│
+├── tests/
+│   ├── conftest.py              # Shared test fixtures (Y-shaped network)
+│   ├── test_preprocessing.py    # Interpolation + boundary detection tests
+│   ├── test_graph.py            # Graph construction + branchpoint tests
+│   ├── test_pathfinding.py      # DFS + collision detection tests
+│   ├── test_gap_closure.py      # Gap closure pipeline tests
+│   └── test_gcode.py            # G-code writer tests
+│
+├── inputs/
+│   ├── custom/                  # Custom G-code templates (12 .txt files)
+│   │   ├── header_code.txt
+│   │   ├── start_extrusion_code.txt
+│   │   ├── stop_extrusion_code.txt
+│   │   ├── start_extrusion_code_printhead1.txt
+│   │   ├── start_extrusion_code_printhead2.txt
+│   │   ├── stop_extrusion_code_printhead1.txt
+│   │   ├── stop_extrusion_code_printhead2.txt
+│   │   ├── active_pressure_printhead1.txt
+│   │   ├── active_pressure_printhead2.txt
+│   │   ├── rest_pressure_printhead1.txt
+│   │   ├── rest_pressure_printhead2.txt
+│   │   └── dwell_code.txt
+│   └── extension/               # Gap extension files (optional)
+│
+├── pyproject.toml               # Package metadata and dependencies
+├── Dockerfile                   # Docker container for GUI deployment
+└── README.md
+```
+
+---
+
+## Development
+
+### Running Tests
+
+```bash
+pip install ".[dev]"
+pytest tests/ -v
+```
+
+### Code Style
+
+```bash
+ruff check xcavate/
+```
+
+### Building the Docker Image
+
+```bash
+docker build -t xcavate .
+docker run -p 8501:8501 xcavate
+```
+
+---
 
 ## Volumetric Flow Rate
 
-This parameter is the volumetric flow rate, Q, of the ink through the printhead nozzle. Q varies with the ink, syringe, and nozzle, and can be experimentally determined using the "calibration.py" script (see readme_calibration.md for instructions).
+The volumetric flow rate `Q` of the ink through the printhead nozzle varies with the ink, syringe, and nozzle. It can be experimentally determined using the calibration module. This value is necessary when printing vessels of varying radii. If not specified, X-CAVATE defaults to 0.127 mm^3/s.
 
-This value is necessary when printing vessels of varying radii.
+## Tolerancing
 
-If the user does not specify the flow rate, X-CAVATE will default to a value of 0.127 mm^3/s.
+Branchpoints are sites prone to nozzle collisions because they contain many closely-spaced coordinates. The tolerance value overrides the nozzle outer diameter for collision detection at these sites: any neighboring coordinate within the tolerance distance will be included in the same print pass, even if it would normally be flagged as a collision. Default: 0 (no tolerance).
 
-###
+## Gap Closure
 
-# Summary of Parameters and Default Values
+X-CAVATE has two features for optimizing closure of gaps at print pass junctions:
 
-### Required Parameters:
+**1. Nodal Overlap** (`--num_overlap`): Overlap the end of a print pass with the previously-printed pass it connects to by N nodes. If fewer than N nodes exist in the existing pass, X-CAVATE retraces the entire pass.
 
-| Parameter | Description | Value |
-| ----------- | ----------- | ----------- |
-| network_file | Path to .txt file containing network coordinates | |
-| inletoutlet_file | Path to .txt file containing inlet and outlet coordinates | |
-| multimaterial | Two inks (arterial, venous) | 1=Yes, 0=No | 
-| tolerance_flag | Include tolerance? | 1=Yes, 0=No |
-| nozzle_diameter | Nozzle outer diameter (mm) |  |
-| container_height | Height of the print container (mm) | |
-| amount_up | Amount above container_height by which to raise nozzle(s) in z-direction before translating between print passes or between active/inactive nozzles (mm) | 10 |
-| num_decimals | Number of decimals places for rounding output values | |
-| speed_calc | Compute print speeds for changing radii? | 1=Yes, 0=No |
-| plots | Generate plots of network print paths? | 1=Yes, 0=No |
-| downsample | Downsample interpolated network? | 1=Yes, 0=No | 
-| custom | Including custom g-code? | 1=Yes, 0=No |
-| printer_type | Type of custom printer? | 2=Aerotech, 1=Positive ink displacement, 0=Pressure-based |
+**2. Segment Extension** (via extension files): Manually specify which passes to extend and by how much (delta x, y, z in mm). See `inputs/extension/` for file format.
 
+---
 
-<br>
+## License
 
-### Optional Parameters and Default Values:
-| Parameter | Description | Default Value |
-| ----------- | ----------- | ----------- |
-| tolerance   | Amount of tolerance (mm) | 0 | 
-| container_x | Dimensions of print container in x (mm) | 50 |
-| container_y | Dimensions of print container in y (mm) | 50 |
-| scale_factor | Multiple by which to scale the size of the input network | 1 (matches input, i.e. not scaled) |
-| downsample_factor | By what factor should xcavate downsample the interpolated network? | 1 (no downsampling) |
-| flow | Volumetric flow rate of the ink through the syringe (mm^3/s) | 0.127 |
-| top_padding | Amount of padding (mm) to add above maximum z-coordinate in network | 0 |
-| dwell_start | Duration of time (s) to dwell at start of print segment | 0.08 |
-| dwell_end | Duration of time (s) to dwell at end of print segment | 0.08|
-| printhead_1 | Name of the printhead holding the arterial ink | Aa |
-| printhead_2 | Name of the printhead holding the venous ink | Ab |
-| axis_1 | Name of the printer axis (z-axis) holding the arterial ink | A |
-| axis_2 | Name of the printer axis (z-axis) holding the venous ink | B |
-| print_speed | Print speed (feed rate) for constant radii (mm/s) | 1 |
-| resting_pressure | Extrusion pressure for non-active nozzle during multimaterial printing (psi) | 10 |
-| active_pressure | Extrusion pressure for active nozzle during multimaterial printing (psi) | 5 |
-| offset_x | Distance between the printhead nozzles in x, i.e., x-offset (mm) | 103 |
-| offset_y | Distance between the printhead nozzles in y, i.e., y-offset (mm) | 0.5 |
-| front_nozzle | 1 if venous nozzle (right printhead) is in front of arterial (left printhead), meaning it is physically closer to the user; 2 if behind | 1 |
-| num_overlap | Number of nodes by which to overlap segments (for gap closure) | 0 |
-| close_sm | Providing an additional gap closure file (single material)? 1=Yes, 0=No | 0 |
-| close_mm | Providing an additional gap closure file (multimaterial)? 1=Yes, 0=No | 0 |
-| jog_speed | Jog speed (mm/s) | 5 |
-| jog_translation | Jog speed for translating between nozzles in multimaterial mode (mm/s) | 10 |
-| jog_speed_lift | Jog speed for initial nozzle lift (mm/s) | 0.25 |
-| initial_lift | Distance over which to use jog_speed_lift when lifting nozzle (mm) | 0.5 |
-| positiveInk_start | Extrusion start value for positive ink displacement-based printing (mm) | 0 |
-| positiveInk_end | Extrusion stop value (mm) for positive ink displacement-based printing (mm) | 0 |
-| positiveInk_radii | Use vessel radii for extrusion calculations? 1 = Yes, 0 = No | 0 |
-| positiveInk_diam | Vessel diameter (mm) for positive ink displacement-based printing (not using SimVascular radii) | 1 |
-| positiveInk_syringe_diam | Syringe diameter (mm) for positive ink displacement-based printing | 1 |
-| positiveInk_factor | Extrusion value multiplier for positive ink displacement-based printing | 1 |
-| positiveInk_start_arterial |  Extrusion start value for arterial ink in positive ink displacement-based printing (mm) | 0 |
-| positiveInk_start_venous | Extrusion start value for venous ink in positive ink displacement-based printing (mm) | 0 |
-| positiveInk_end_arterial | Extrusion stop value for arterial ink in positive ink displacement-based printing (mm) | 0 |
-| positiveInk_end_venous | Extrusion stop value for venous ink in positive ink displacement-based printing (mm) | 0 |
+Copyright (c) Stanford University, The Regents of the University of California, and others.
 
-# Local Code Setup
+All Rights Reserved.
 
-The input network coordinates should be listed in terms of centimeters. X-CAVATE will internally convert the centimeters to millimeters.
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject
+to the following conditions:
 
-Before running the code, create two new folders within the same folder containing xcavate.py: one folder labeled "inputs," which should contain the two network .txt files, and an empty folder labled "outputs."
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-Ensure Python 3 is installed locally before running xcavate.py.
-
-# Running from the Command Line
-
-The following is an example prompt to run at the command line, with sample parameter values specified:
-
-`python xcavate.py --network_file inputs/VesselNetwork.txt --inletoutlet_file inputs/InletsOutlets.txt --multimaterial 1 --tolerance 0 --nozzleOD 0.65 --numDecimalsOutput 5 --container_height 50 --tolerance_flag 0 --speed_calc 1 --plots 1 --downsample 0 --flow 0.127 --customG 1`
-
-# License
-
-Copyright (c) Stanford University, The Regents of the University of
-               California, and others.
- 
- All Rights Reserved.
- 
- Permission is hereby granted, free of charge, to any person obtaining
- a copy of this software and associated documentation files (the
- "Software"), to deal in the Software without restriction, including
- without limitation the rights to use, copy, modify, merge, publish,
- distribute, sublicense, and/or sell copies of the Software, and to
- permit persons to whom the Software is furnished to do so, subject
- to the following conditions:
- 
- The above copyright notice and this permission notice shall be included
- in all copies or substantial portions of the Software.
-
- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
- IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
- TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
- PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
- OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
- PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
