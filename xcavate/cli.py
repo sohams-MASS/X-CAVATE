@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from xcavate.config import PathfindingAlgorithm, PrinterType, XcavateConfig
+from xcavate.config import OverlapAlgorithm, PathfindingAlgorithm, PrinterType, XcavateConfig
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--downsample_factor", type=int, default=1, help="Downsample factor")
 
     # --- Print settings ---
-    p.add_argument("--flow", type=float, default=0.1272265034574846,
+    p.add_argument("--flow", type=float, default=0.1609429886081009,
                     help="Volumetric flow rate (mm^3/s)")
     p.add_argument("--print_speed", type=float, default=1, help="Print speed (mm/s)")
     p.add_argument("--jog_speed", type=float, default=5, help="Jog speed (mm/s)")
@@ -90,6 +90,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- Gap closure ---
     p.add_argument("--num_overlap", type=int, default=0, help="Overlap nodes")
+    p.add_argument("--overlap_algorithm", type=str, default="retrace",
+                    choices=["retrace", "consecutive"],
+                    help="Overlap algorithm: 'retrace' (original) or 'consecutive' (fast)")
     p.add_argument("--close_sm", type=int, default=0,
                     help="Gap closure file for single material? (1=yes, 0=no)")
     p.add_argument("--close_mm", type=int, default=0,
@@ -158,6 +161,7 @@ def args_to_config(args: argparse.Namespace) -> XcavateConfig:
         resting_pressure=args.resting_pressure,
         active_pressure=args.active_pressure,
         num_overlap=args.num_overlap,
+        overlap_algorithm=OverlapAlgorithm(args.overlap_algorithm),
         close_sm=bool(args.close_sm),
         close_mm=bool(args.close_mm),
         positive_ink_start=args.positiveInk_start,

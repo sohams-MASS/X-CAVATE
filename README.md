@@ -52,7 +52,26 @@ The pipeline performs seven steps:
 
 **Requirements:** Python 3.9+
 
-### Option A: pip install
+### Option A: Conda (Recommended)
+
+The easiest way to set up a fully isolated environment with all dependencies (including the GUI):
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/X-CAVATE.git
+cd X-CAVATE
+
+# Create and activate the conda environment
+conda env create -f environment.yml
+conda activate xcavate-gui
+
+# Verify
+xcavate --help
+```
+
+This installs Python 3.11, all core and GUI dependencies, and the `xcavate` package itself in one step. To remove the environment later: `conda env remove -n xcavate-gui`.
+
+### Option B: pip install
 
 ```bash
 # Clone the repository
@@ -72,7 +91,7 @@ pip install ".[dev]"
 pip install ".[all]"
 ```
 
-### Option B: Development mode
+### Option C: Development mode
 
 ```bash
 pip install -e ".[all]"
@@ -86,7 +105,9 @@ pip install -e ".[all]"
 | pandas | >= 1.3 | Data handling |
 | scipy | >= 1.7 | KD-tree spatial indexing, interpolation |
 | plotly | >= 5.0 | Interactive 3D visualization |
-| streamlit | >= 1.20 | Web GUI *(optional, installed with `[gui]`)* |
+| matplotlib | >= 3.5 | Static plots |
+| prompt_toolkit | — | Interactive prompts |
+| streamlit | >= 1.20 | Web GUI *(optional with pip; included in conda env)* |
 
 ---
 
@@ -201,6 +222,11 @@ The web-based GUI is the easiest way to run X-CAVATE. No coding required.
 **Start the server:**
 
 ```bash
+# If using conda:
+conda activate xcavate-gui
+streamlit run xcavate/gui/app.py
+
+# If using pip:
 streamlit run xcavate/gui/app.py
 ```
 
@@ -242,7 +268,7 @@ Paste your printer-specific G-code into each text area. The snippets are saved a
 
 ### Mode 2: Command-Line Interface
 
-After `pip install .`, the `xcavate` command is available system-wide. You can also use `python -m xcavate`.
+After installation (via `conda activate xcavate-gui` or `pip install .`), the `xcavate` command is available. You can also use `python -m xcavate`.
 
 **Minimal example:**
 
@@ -657,6 +683,7 @@ X-CAVATE/
 │   └── extension/               # Gap extension files (optional)
 │
 ├── pyproject.toml               # Package metadata and dependencies
+├── environment.yml              # Conda environment (xcavate-gui)
 ├── Dockerfile                   # Docker container for GUI deployment
 └── README.md
 ```
@@ -668,6 +695,11 @@ X-CAVATE/
 ### Running Tests
 
 ```bash
+# With conda (dev tools already installed):
+conda activate xcavate-gui
+pytest tests/ -v
+
+# With pip:
 pip install ".[dev]"
 pytest tests/ -v
 ```

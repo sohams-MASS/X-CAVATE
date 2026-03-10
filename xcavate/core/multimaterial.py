@@ -33,8 +33,8 @@ def classify_passes_by_material(
     for i in print_passes:
         nodes = print_passes[i]
         if len(nodes) > 1:
-            # Use second node to avoid branchpoint ambiguity
-            artven = points[nodes[1], 4]
+            # Use last node to match original algorithm behavior
+            artven = points[nodes[-1], 4]
         else:
             artven = points[nodes[0], 4]
         classification[i] = 0 if artven == 0 else 1

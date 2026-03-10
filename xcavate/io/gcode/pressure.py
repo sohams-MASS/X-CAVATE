@@ -48,10 +48,10 @@ class PressureGcodeWriter(GcodeWriter):
                 f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed} \n")
         else:
             f.write("; Print Pass 0 \n")
-            f.write(f"G92 X{x} Y{y} Z{z} \n")
-            f.write("G90 F0.5 \n")
+            f.write(f"G92 X{x} Y{y} {cfg.axis_1}{z} \n")
+            f.write(f"G90 F{speed} \n")
             self._write_custom(f, self.codes.start_extrusion if self.codes else "")
-            f.write(f"G1 X{x} Y{y} Z{z} F{speed} \n")
+            f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed} \n")
 
     def _write_pass_start(self, f: TextIO, pass_idx, x, y, z, speed, artven, prev_x, prev_y):
         cfg = self.config
@@ -60,10 +60,14 @@ class PressureGcodeWriter(GcodeWriter):
         if cfg.multimaterial:
             self._write_mm_pass_start(f, x, y, z, speed, artven, prev_x, prev_y)
         else:
+            f.write("G90 \n")
             f.write(f"G1 X{x} Y{y} \n")
-            f.write(f"G1 X{x} Y{y} Z{z} \n")
+            f.write("G90 \n")
+            f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z}\n")
+            f.write("G91 \n")
             self._write_custom(f, self.codes.start_extrusion if self.codes else "")
-            f.write(f"G1 X{x} Y{y} Z{z} F{speed} \n")
+            f.write("G90 \n")
+            f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed}\n")
 
     def _write_mm_pass_start(self, f, x, y, z, speed, artven, prev_x, prev_y):
         """Handle multimaterial printhead switching at pass boundaries."""
@@ -123,7 +127,7 @@ class PressureGcodeWriter(GcodeWriter):
         if self.config.multimaterial:
             f.write(f"G1 X{x} Y{y} {self._curr_axis}{z} F{speed} \n")
         else:
-            f.write(f"G1 X{x} Y{y} Z{z} F{speed} \n")
+            f.write(f"G1 X{x} Y{y} {self.config.axis_1}{z} F{speed}\n")
 
     def _write_pass_end(self, f: TextIO, network_top: float):
         cfg = self.config
@@ -134,9 +138,11 @@ class PressureGcodeWriter(GcodeWriter):
             f.write(f"G90 G1 {cfg.axis_1}{network_top} {cfg.axis_2}{network_top} F{cfg.jog_speed} \n")
             f.write(f"; ending on {'ARTERIAL' if self._curr == 1 else 'VENOUS'} \n")
         else:
+            f.write("G91 \n")
             self._write_custom(f, self.codes.stop_extrusion if self.codes else "")
-            f.write(f"G91 G1 Z{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
-            f.write(f"G90 G1 Z{network_top} F{cfg.jog_speed} \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
+            f.write("G90 \n")
+            f.write(f"G1 {cfg.axis_1}{network_top} F10 \n")
 
     def _write_custom(self, f: TextIO, code: str):
         """Write custom G-code snippet if available."""

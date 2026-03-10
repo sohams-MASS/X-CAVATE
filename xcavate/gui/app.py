@@ -16,7 +16,7 @@ from typing import Optional
 
 import streamlit as st
 
-from xcavate.config import PathfindingAlgorithm, PrinterType, XcavateConfig
+from xcavate.config import OverlapAlgorithm, PathfindingAlgorithm, PrinterType, XcavateConfig
 
 # ---------------------------------------------------------------------------
 # Page configuration
@@ -152,7 +152,7 @@ with st.sidebar:
         flow = st.number_input(
             "Flow (mm^3/s)",
             min_value=0.0,
-            value=0.1272265034574846,
+            value=0.1609429886081009,
             step=0.001,
             format="%.16f",
         )
@@ -307,6 +307,18 @@ with st.sidebar:
         num_overlap = st.number_input(
             "Overlap nodes", min_value=0, value=0, step=1,
         )
+        _overlap_algo_labels = {
+            "Retrace (original)": OverlapAlgorithm.RETRACE,
+            "Consecutive (fast)": OverlapAlgorithm.CONSECUTIVE,
+        }
+        overlap_algo_label = st.selectbox(
+            "Overlap algorithm",
+            options=list(_overlap_algo_labels.keys()),
+            index=0,
+            help="'Retrace' scans all previous passes for shared nodes (original behavior). "
+                 "'Consecutive' only checks adjacent pass pairs (faster).",
+        )
+        overlap_algorithm = _overlap_algo_labels[overlap_algo_label]
         generate_plots = st.toggle("Generate plots", value=True)
         speed_calc = st.toggle("Speed calculation", value=False)
 
@@ -367,6 +379,7 @@ def _build_config(
         custom_gcode=custom_gcode,
         algorithm=algorithm,
         num_overlap=num_overlap,
+        overlap_algorithm=overlap_algorithm,
         generate_plots=generate_plots,
         speed_calc=speed_calc,
         output_dir=output_dir,

@@ -148,6 +148,11 @@ class GcodeWriter(ABC):
                     prev_point = print_passes[i - 1][-1]
                     prev_x = round(points[prev_point, 0], nd)
                     prev_y = round(points[prev_point, 1], nd)
+                    # Adjust for gap extension overshoot on previous pass
+                    if gap_extensions and (i - 1) in gap_extensions:
+                        ext = gap_extensions[i - 1]
+                        prev_x = round(points[prev_point, 0] + ext.delta_x, nd)
+                        prev_y = round(points[prev_point, 1] + ext.delta_y, nd)
                     self._write_pass_start(f, i, x, y, z, speed, artven, prev_x, prev_y)
                 else:
                     self._write_move(f, j, j_counter, x, y, z, speed, points, nd, print_passes[i])

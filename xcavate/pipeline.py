@@ -22,7 +22,7 @@ from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
-from xcavate.config import PrinterType, XcavateConfig
+from xcavate.config import OverlapAlgorithm, PrinterType, XcavateConfig
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +190,10 @@ def run_xcavate(
 
     # Optional overlap
     if config.num_overlap > 0:
-        print_passes_sm = add_overlap(print_passes_sm, config.num_overlap, graph)
+        print_passes_sm = add_overlap(
+            print_passes_sm, config.num_overlap, graph,
+            algorithm=config.overlap_algorithm.value,
+        )
 
     # Reorder for minimal travel
     print_passes_sm = reorder_passes_nearest_neighbor(print_passes_sm, points_interp)
@@ -229,7 +232,10 @@ def run_xcavate(
 
         # Overlap
         if config.num_overlap > 0:
-            print_passes_mm = add_overlap(print_passes_mm, config.num_overlap, graph)
+            print_passes_mm = add_overlap(
+                print_passes_mm, config.num_overlap, graph,
+                algorithm=config.overlap_algorithm.value,
+            )
 
         # Re-classify after subdivision
         material_map = classify_passes_by_material(
@@ -266,6 +272,9 @@ def run_xcavate(
         _write_plots(
             config, print_passes_sm, print_passes_mm,
             points_interp, material_map,
+            points_original=points, coord_num_dict_original=coord_num_dict,
+            was_downsampled=config.downsample and config.downsample_factor > 1,
+            has_overlap=config.num_overlap > 0,
         )
 
     # Compute network top for G-code
@@ -301,6 +310,9 @@ def run_xcavate(
             gap_extensions=gap_ext_mm,
             network_top=network_top,
         )
+
+    # Print operator instructions
+    _print_instructions(config, points_interp, print_passes_sm)
 
     elapsed = time.time() - t0
     logger.info("X-CAVATE completed in %.1f seconds", elapsed)
@@ -351,7 +363,7 @@ def _subdivide_by_material(
     if num_columns < 5:
         return
 
-    # Swap outlier artven values at pass boundaries
+    # Swap outlier artven values at pass boundaries and write back to points
     for i in list(print_passes.keys()):
         nodes = print_passes[i]
         if len(nodes) < 3:
@@ -367,6 +379,9 @@ def _subdivide_by_material(
         for j in range(1, len(artven) - 1):
             if artven[j - 1] == artven[j + 1] and artven[j] != artven[j - 1]:
                 artven[j] = artven[j - 1]
+        # Write swapped values back so break point detection uses them
+        for j, n in enumerate(nodes):
+            points[n, 4] = artven[j]
 
     # Find material transition break points
     break_points = {}
@@ -453,16 +468,41 @@ def _write_plots(
     print_passes_mm: Optional[Dict[int, List[int]]],
     points: np.ndarray,
     material_map: Optional[Dict[int, int]],
+    points_original: Optional[np.ndarray] = None,
+    coord_num_dict_original: Optional[Dict[int, int]] = None,
+    was_downsampled: bool = False,
+    has_overlap: bool = False,
 ) -> None:
     """Generate and save interactive 3D plots."""
-    from xcavate.viz.plotting import create_network_plot
+    from xcavate.viz.plotting import create_network_plot, create_original_network_plot
     from xcavate.core.multimaterial import generate_multimaterial_colors
+
+    # Original network plot (pre-interpolation)
+    if points_original is not None and coord_num_dict_original is not None:
+        fig_orig = create_original_network_plot(
+            points_original, coord_num_dict_original, title="Original Network",
+        )
+        fig_orig.write_html(str(config.plots_dir / "network_original.html"))
 
     # Single material plot
     fig_sm = create_network_plot(
         print_passes_sm, points, title="Single Material",
     )
     fig_sm.write_html(str(config.plots_dir / "network_SM.html"))
+
+    # Downsampled SM plot
+    if was_downsampled:
+        fig_ds = create_network_plot(
+            print_passes_sm, points, title="Downsampled SM",
+        )
+        fig_ds.write_html(str(config.plots_dir / "network_downsampled_SM.html"))
+
+    # SM overlap plot
+    if has_overlap:
+        fig_overlap = create_network_plot(
+            print_passes_sm, points, title="SM with Overlap",
+        )
+        fig_overlap.write_html(str(config.plots_dir / "network_SM_overlap.html"))
 
     # Multimaterial plot
     if print_passes_mm is not None and material_map is not None:
@@ -471,3 +511,109 @@ def _write_plots(
             print_passes_mm, points, title="Multimaterial", colors=colors,
         )
         fig_mm.write_html(str(config.plots_dir / "network_MM.html"))
+
+
+def _print_instructions(
+    config: XcavateConfig,
+    points: np.ndarray,
+    print_passes_sm: Dict[int, List[int]],
+) -> None:
+    """Print operator-facing instructions for centering the print.
+
+    Replicates xcavate.py lines 5488-5565.
+    """
+    # Network bounding box
+    min_x = float(np.min(points[:, 0]))
+    max_x = float(np.max(points[:, 0]))
+    min_y = float(np.min(points[:, 1]))
+    max_y = float(np.max(points[:, 1]))
+    min_z = float(np.min(points[:, 2]))
+    max_z = float(np.max(points[:, 2]))
+    total_z = abs(min_z) + abs(max_z)
+
+    # Starting coordinate (first node of first pass)
+    start_node = print_passes_sm[0][0]
+    xs = points[start_node, 0]
+    ys = points[start_node, 1]
+
+    # Travel dimensions
+    left = abs(xs - min_x)
+    right = abs(max_x - xs)
+    forward = abs(ys - min_y)
+    backward = abs(max_y - ys)
+
+    # Centering positions
+    x_start = (config.container_x + left - right) / 2
+    y_start = (config.container_y + forward - backward) / 2
+    z_start = (config.container_height - total_z) / 2
+
+    print("\n")
+    print(f"For a container of dimensions x={config.container_x} mm, "
+          f"y={config.container_y} mm, z={config.container_height}mm, "
+          f"center the print by following these instructions.")
+
+    # Single material instructions
+    print("\nFor SINGLE material:")
+    print("\nIf +x is right, +y is backwards, and +z is upwards "
+          "(with respect to nozzle's movement or relative movement to the printbed):")
+    print("1. Position nozzle in left corner of the container, "
+          "of the container face closest to the observer.")
+    print("\nIf +x is left, +y is forwards, and +z is upwards "
+          "(with respect to nozzle's movement or relative movement to the printbed):")
+    print("1. Position nozzle in right corner of the container, "
+          "of the container face farthest from the observer.")
+    print("\n2. Enter the g-code command: G92 X0 Y0")
+    print(f"3. Move linearly to X{round(x_start, 2)} Y{round(y_start, 2)} "
+          f"with g-code command: G1 X{round(x_start, 2)} Y{round(y_start, 2)}")
+    print(f"4. Manually maneuver the Z-axis until it is {round(z_start, 2)} mm "
+          f"from the bottom of the container.")
+    print("5. Press start!")
+
+    # Multimaterial calibration instructions
+    print(f"\nfor MULTIMATERIAL:\n")
+    print("If you have not already calibrated, calibrate as below:")
+    print("To find the offset in x- and y- between the two nozzles:")
+    print(f"1. Position first nozzle (arterial) on the Calibration Tip "
+          f"and enter: G92 X0 Y0 {config.axis_1}0")
+    print(f"2. Position second nozzle (venous) on the Calibration Tip "
+          f"and enter: G92 {config.axis_2}0")
+    print("3. BEFORE MOVING ANYTHING, record the offset between the nozzles "
+          "in X and Y, which will be the current x- and y-coordinates of the "
+          "venous nozzle.")
+    print("4. Re-run x-cavate, inputting the offsets at the command line as "
+          "offset_x and offset_y. Use the front_nozzle variable to specify "
+          "whether the venous nozzle (right printhead) is in front "
+          "(front_nozzle=1) or behind (front_nozzle=2) the arterial nozzle "
+          "(left printhead).")
+
+    # Multimaterial printing instructions
+    print("\nTo position for multimaterial printing, after completing "
+          "the calibration:")
+    print("\nIf +x is right, +y is backwards, and +z is upwards "
+          "(with respect to nozzle's movement or relative movement to the printbed):")
+    print("1. Position first nozzle (arterial) in left corner of the container, "
+          "of the container face closest to the observer.")
+    print("\nIf +x is left, +y is forwards, and +z is upwards "
+          "(with respect to nozzle's movement or relative movement to the printbed):")
+    print("1. Position second nozzle (venous) in right corner of the container, "
+          "of the container face farthest from the observer.")
+    print("\n2. Enter the g-code command: G92 X0 Y0")
+    print(f"3. Enter: G1 X{round(x_start, 2)} Y{round(y_start, 2)}")
+    print(f"4. Enter: G1 {config.axis_1}0 {config.axis_2}0")
+    print(f"5. Manually maneuver FIRST nozzle until it is {round(z_start, 2)} mm "
+          f"from the bottom of the container.")
+    print("6. Record the current z-position of FIRST nozzle, and DO NOT RE-ZERO. "
+          "Will now move the SECOND nozzle to the same z-position.")
+    print(f"7. Enter: G1 {config.axis_2}(current position of FIRST nozzle)")
+    print("8. Just to reiterate... DO NOT RE-ZERO. Both nozzles are now at "
+          "the correct starting position.")
+    print("9. Press start!")
+
+    # Padding report
+    print(f"\n")
+    print("Your print will have the following padding:\n")
+    print(f"left padding: {round(x_start - left, 2)}")
+    print(f"right padding: {round(config.container_x - (x_start + right), 2)}")
+    print(f"back padding: {round(config.container_y - (y_start + backward), 2)}")
+    print(f"front padding: {round(y_start - forward, 2)}")
+    print("\n")

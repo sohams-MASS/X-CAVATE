@@ -19,6 +19,12 @@ class PathfindingAlgorithm(Enum):
     SWEEP_LINE = "sweep_line"  # Bottom-up sweep-line approach
 
 
+class OverlapAlgorithm(Enum):
+    """Available overlap algorithms."""
+    RETRACE = "retrace"        # Original: scan all previous passes, retrace backwards
+    CONSECUTIVE = "consecutive" # Refactored: check consecutive pass pairs for neighbors
+
+
 @dataclass
 class XcavateConfig:
     """All configuration parameters for an X-CAVATE run.
@@ -58,7 +64,7 @@ class XcavateConfig:
     downsample_factor: int = 1
 
     # --- Print settings ---
-    flow: float = 0.1272265034574846  # mm^3/s
+    flow: float = 0.1609429886081009  # mm^3/s; experimentally determined
     print_speed: float = 1.0         # mm/s
     jog_speed: float = 5.0           # mm/s
     jog_speed_lift: float = 0.25     # mm/s for initial z-lift
@@ -80,6 +86,7 @@ class XcavateConfig:
 
     # --- Gap closure ---
     num_overlap: int = 0
+    overlap_algorithm: OverlapAlgorithm = OverlapAlgorithm.RETRACE
     close_sm: bool = False           # single-material gap file
     close_mm: bool = False           # multimaterial gap file
 

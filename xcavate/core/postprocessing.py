@@ -133,17 +133,15 @@ def add_overlap(
     print_passes: Dict[int, List[int]],
     num_overlap: int,
     graph: Dict[int, List[int]],
+    algorithm: str = "retrace",
 ) -> Dict[int, List[int]]:
     """Add nodal overlap between connected passes for gap closure.
-
-    For each pair of consecutive passes where the last node of pass i is a
-    graph neighbor of the first node of pass i+1, extend pass i+1 by prepending
-    up to `num_overlap` nodes from the end of pass i (and vice versa).
 
     Args:
         print_passes: Current passes.
         num_overlap: Number of overlap nodes to add.
         graph: Adjacency dict.
+        algorithm: "retrace" (original) or "consecutive" (fast).
 
     Returns:
         Passes with overlapping endpoints.
@@ -151,6 +149,77 @@ def add_overlap(
     if num_overlap <= 0:
         return print_passes
 
+    if algorithm == "retrace":
+        return _add_overlap_retrace(print_passes, num_overlap)
+    else:
+        return _add_overlap_consecutive(print_passes, num_overlap, graph)
+
+
+def _add_overlap_retrace(
+    print_passes: Dict[int, List[int]],
+    num_overlap: int,
+) -> Dict[int, List[int]]:
+    """Original overlap: scan all previous passes for shared last-node, retrace backwards.
+
+    For each pass i (from 1 onward):
+      1. Get last node of pass i
+      2. Search all passes j < i for that node
+      3. If found at index idx in pass j, retrace backwards:
+         append nodes [idx-1, idx-2, ...] from pass j to END of pass i
+         up to num_overlap nodes
+    """
+    result = {i: list(v) for i, v in print_passes.items()}
+    pass_indices = sorted(result.keys())
+
+    pass_ends_on_shared = []
+    pass_with_shared = []
+    common_node = []
+
+    # Find passes whose last node appears in an earlier pass
+    for idx, i in enumerate(pass_indices):
+        if idx == 0:
+            continue
+        check_last_node = result[i][-1]
+        for j in pass_indices:
+            if j >= i:
+                break
+            for k in result[j]:
+                if k == check_last_node:
+                    pass_ends_on_shared.append(i)
+                    pass_with_shared.append(j)
+                    common_node.append(check_last_node)
+
+    # Retrace backwards from shared node in earlier pass
+    for track_point, shared_pass in enumerate(pass_with_shared):
+        if track_point >= len(pass_ends_on_shared):
+            break
+        node = common_node[track_point]
+        if node not in result[shared_pass]:
+            continue
+        idx = result[shared_pass].index(node)
+        if idx == 0:
+            continue
+        idx_count = 0
+        while idx_count < num_overlap and (idx - (idx_count + 1)) >= 0:
+            result[pass_ends_on_shared[track_point]].append(
+                result[shared_pass][idx - (idx_count + 1)]
+            )
+            idx_count += 1
+
+    return result
+
+
+def _add_overlap_consecutive(
+    print_passes: Dict[int, List[int]],
+    num_overlap: int,
+    graph: Dict[int, List[int]],
+) -> Dict[int, List[int]]:
+    """Consecutive overlap: check consecutive pass pairs for graph neighbors.
+
+    For each pair of consecutive passes where the last node of pass i is a
+    graph neighbor of the first node of pass i+1, extend pass i+1 by prepending
+    up to `num_overlap` nodes from the end of pass i.
+    """
     result = {i: list(v) for i, v in print_passes.items()}
     pass_indices = sorted(result.keys())
 
@@ -166,18 +235,9 @@ def add_overlap(
         last_of_curr = curr_pass[-1]
         first_of_next = next_pass[0]
 
-        # If last node of current pass neighbors first node of next pass
         if first_of_next in graph.get(last_of_curr, []):
-            # Prepend overlap nodes from end of current pass to start of next
-            overlap = curr_pass[-min(num_overlap, len(curr_pass)) :]
+            overlap = curr_pass[-min(num_overlap, len(curr_pass)):]
             result[next_key] = overlap + next_pass
-
-        last_of_next = next_pass[-1] if next_pass else None
-        first_of_curr_next = (
-            result[pass_indices[idx + 1]][0]
-            if idx + 1 < len(pass_indices)
-            else None
-        )
 
     return result
 

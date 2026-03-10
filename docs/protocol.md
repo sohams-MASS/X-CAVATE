@@ -8,7 +8,36 @@ This protocol describes how to use X-CAVATE to convert SimVascular b-spline outp
 
 ## Part A: Installation (5 minutes)
 
-### Option 1: GUI or CLI (pip install)
+### Option 1: Conda (Recommended)
+
+1. Open a terminal (Mac: Terminal.app; Windows: Anaconda Prompt or PowerShell).
+
+2. Confirm conda is installed:
+   ```
+   conda --version
+   ```
+   If not installed, download Anaconda or Miniconda from [https://docs.conda.io/en/latest/miniconda.html](https://docs.conda.io/en/latest/miniconda.html).
+
+3. Navigate to the folder where you want to store X-CAVATE and clone the repository:
+   ```
+   git clone https://github.com/skylarscottlab/X-CAVATE.git
+   cd X-CAVATE
+   ```
+   Alternatively, download and unzip the repository from the GitHub page (green "Code" button > "Download ZIP").
+
+4. Create and activate the conda environment (installs Python 3.11, all dependencies, and the X-CAVATE package):
+   ```
+   conda env create -f environment.yml
+   conda activate xcavate-gui
+   ```
+
+5. Verify the installation:
+   ```
+   xcavate --help
+   ```
+   You should see the full list of command-line parameters.
+
+### Option 2: pip install
 
 1. Open a terminal (Mac: Terminal.app; Windows: Anaconda Prompt or PowerShell).
 
@@ -24,7 +53,7 @@ This protocol describes how to use X-CAVATE to convert SimVascular b-spline outp
    ```
    Alternatively, download and unzip the repository from the GitHub page (green "Code" button > "Download ZIP").
 
-4. Install X-CAVATE with GUI support (includes all required libraries: numpy, scipy, pandas, plotly, streamlit):
+4. Install X-CAVATE with GUI support (includes all required libraries: numpy, scipy, pandas, plotly, matplotlib, streamlit):
    ```
    pip install ".[gui]"
    ```
@@ -39,7 +68,7 @@ This protocol describes how to use X-CAVATE to convert SimVascular b-spline outp
    ```
    You should see the full list of command-line parameters.
 
-### Option 2: Docker (no Python required)
+### Option 3: Docker (no Python required)
 
 1. Install Docker Desktop from [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop).
 
@@ -172,8 +201,9 @@ Incorporating time delays ("dwells") at the first and last node of each print pa
 
 ### Mode 1: Web GUI
 
-1. Start the server:
+1. Activate the environment and start the server:
    ```
+   conda activate xcavate-gui
    streamlit run xcavate/gui/app.py
    ```
    A browser window opens at **http://localhost:8501**.
@@ -220,8 +250,9 @@ Incorporating time delays ("dwells") at the first and last node of each print pa
 
 ### Mode 2: Command-Line Interface
 
-1. Open a terminal and navigate to the X-CAVATE directory:
+1. Open a terminal, activate the environment, and navigate to the X-CAVATE directory:
    ```
+   conda activate xcavate-gui
    cd X-CAVATE
    ```
 
@@ -389,7 +420,7 @@ Open the `.html` files in any web browser to rotate, zoom, and inspect the print
 
 | Feature | GUI | CLI | Docker |
 |---------|-----|-----|--------|
-| Python installation required | Yes | Yes | No |
+| Python installation required | Yes (via conda or pip) | Yes (via conda or pip) | No |
 | Custom G-code via file editing | No (use GUI editor) | Yes (`inputs/custom/`) | Optional (mount or use GUI editor) |
 | Custom G-code via GUI editor | Yes | No | Yes |
 | Interactive 3D plots | In-browser | Open `.html` files | In-browser |

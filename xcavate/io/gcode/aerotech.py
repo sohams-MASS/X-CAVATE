@@ -37,6 +37,17 @@ class AerotechGcodeWriter(GcodeWriter):
         f.write("ROUNDING ON \n")
         f.write("G90 \n")
 
+        if not cfg.multimaterial:
+            # Single-material Aerotech: single axis, single printhead
+            f.write("; Print Pass 0 \n")
+            f.write(f"G92 X{x} Y{y} {cfg.axis_1}{z} \n")
+            f.write(f"Enable {cfg.printhead_1} \n")
+            f.write(f"G90 F{speed} \n")
+            f.write(f"BRAKE {cfg.printhead_1} 0 \n")
+            f.write(f"DWELL {cfg.dwell_start} \n")
+            f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed}\n")
+            return
+
         y_to_ven = cfg.offset_y if cfg.front_nozzle == 1 else -cfg.offset_y
 
         if artven == 0 and self._curr == 1:
@@ -72,6 +83,21 @@ class AerotechGcodeWriter(GcodeWriter):
     def _write_pass_start(self, f: TextIO, pass_idx, x, y, z, speed, artven, prev_x, prev_y):
         cfg = self.config
         f.write(f"; Print pass {pass_idx} \n")
+
+        if not cfg.multimaterial:
+            # Single-material Aerotech: single axis, single printhead
+            f.write("G90 \n")
+            f.write(f"BRAKE {cfg.printhead_1} 1 \n")
+            f.write(f"G1 X{x} Y{y} \n")
+            f.write("G90 \n")
+            f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z}\n")
+            f.write(f"Enable {cfg.printhead_1} \n")
+            f.write("G91 \n")
+            f.write(f"BRAKE {cfg.printhead_1} 0 \n")
+            f.write(f"DWELL {cfg.dwell_start} \n")
+            f.write("G90 \n")
+            f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed}\n")
+            return
 
         y_to_ven = cfg.offset_y if cfg.front_nozzle == 1 else -cfg.offset_y
         y_to_art = -cfg.offset_y if cfg.front_nozzle == 1 else cfg.offset_y
@@ -131,16 +157,29 @@ class AerotechGcodeWriter(GcodeWriter):
             f.write(f"G1 X{x} Y{y} {self._curr_axis}{z} F{speed} \n")
 
     def _write_move(self, f: TextIO, node, j_counter, x, y, z, speed, points, nd, pass_nodes):
-        f.write(f"G1 X{x} Y{y} {self._curr_axis}{z} F{speed} \n")
+        if self.config.multimaterial:
+            f.write(f"G1 X{x} Y{y} {self._curr_axis}{z} F{speed} \n")
+        else:
+            f.write(f"G1 X{x} Y{y} {self.config.axis_1}{z} F{speed}\n")
 
     def _write_pass_end(self, f: TextIO, network_top: float):
         cfg = self.config
-        f.write(f"DWELL {cfg.dwell_end} \n")
-        f.write(f"BRAKE {self._curr_ph} 1 \n")
-        f.write(f"BRAKE {self._other_ph} 1 \n")
-        f.write(f"G91 G1 {self._curr_axis}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
-        f.write(f"G90 G1 {cfg.axis_1}{network_top} {cfg.axis_2}{network_top} F{cfg.jog_speed} \n")
-        f.write(f"; ending on {'ARTERIAL' if self._curr == 1 else 'VENOUS'} \n")
+        if not cfg.multimaterial:
+            # Single-material Aerotech: single printhead, single axis
+            f.write(f"Enable {cfg.printhead_1} \n")
+            f.write("G91 \n")
+            f.write(f"DWELL {cfg.dwell_end} \n")
+            f.write(f"BRAKE {cfg.printhead_1} 1 \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
+            f.write("G90 \n")
+            f.write(f"G1 {cfg.axis_1}{network_top} F{cfg.jog_speed} \n")
+        else:
+            f.write(f"DWELL {cfg.dwell_end} \n")
+            f.write(f"BRAKE {self._curr_ph} 1 \n")
+            f.write(f"BRAKE {self._other_ph} 1 \n")
+            f.write(f"G91 G1 {self._curr_axis}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
+            f.write(f"G90 G1 {cfg.axis_1}{network_top} {cfg.axis_2}{network_top} F{cfg.jog_speed} \n")
+            f.write(f"; ending on {'ARTERIAL' if self._curr == 1 else 'VENOUS'} \n")
 
     def _write_footer(self, f: TextIO, network_top: float):
         cfg = self.config
