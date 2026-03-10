@@ -58,7 +58,7 @@ The easiest way to set up a fully isolated environment with all dependencies (in
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/X-CAVATE.git
+git clone https://github.com/sohams-MASS/X-CAVATE.git
 cd X-CAVATE
 
 # Create and activate the conda environment
@@ -75,7 +75,7 @@ This installs Python 3.11, all core and GUI dependencies, and the `xcavate` pack
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/X-CAVATE.git
+git clone https://github.com/sohams-MASS/X-CAVATE.git
 cd X-CAVATE
 
 # Install core package (CLI only)
