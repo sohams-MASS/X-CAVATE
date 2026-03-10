@@ -1,6 +1,7 @@
 # X-CAVATE
 
-Convert vascular network geometries (e.g. from SimVascular) into collision-free 3D printer toolhead pathways and G-code.
+Convert vascular network geometries (e.g. from SimVascular) into collision-free 3D printer toolhead pathways and G-code. 
+Author: Jessica Herrmann
 
 ---
 
