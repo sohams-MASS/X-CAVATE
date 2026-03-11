@@ -53,7 +53,6 @@ st.markdown(
     "**Run X-CAVATE**."
 )
 st.caption("**SM** = single-material \u00a0|\u00a0 **MM** = multimaterial")
-st.caption("Original Code Author: Jessica Herrmann")
 
 st.divider()
 
