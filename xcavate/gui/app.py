@@ -439,6 +439,17 @@ with st.sidebar:
             close_mm_pass_upload = None
             close_mm_delta_upload = None
 
+    # User guide download
+    _guide_path = Path(__file__).resolve().parent.parent.parent / "docs" / "user_guide.pdf"
+    if _guide_path.exists():
+        st.divider()
+        st.download_button(
+            label="Download User Guide (PDF)",
+            data=_guide_path.read_bytes(),
+            file_name="user_guide.pdf",
+            mime="application/pdf",
+            key="dl_user_guide",
+        )
 
 
 # ---------------------------------------------------------------------------
