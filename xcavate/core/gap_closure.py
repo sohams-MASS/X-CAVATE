@@ -16,8 +16,9 @@ through a sequence of conditions:
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -46,6 +47,68 @@ class DisconnectInfo:
     neighbor_locs: Dict[int, List[int]] = field(default_factory=dict)
     neighbor_to_connect: Dict[int, List[int]] = field(default_factory=dict)
     neighbor_index: Dict[int, List[int]] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Index builders (O(N) construction, O(1) lookup)
+# ---------------------------------------------------------------------------
+
+def _build_indices(
+    print_passes: Dict[int, List[int]],
+) -> Tuple[Dict[int, Set[int]], Dict[int, Set[int]]]:
+    """Build hash-based indices for fast node-to-pass lookups.
+
+    Returns
+    -------
+    node_to_passes : dict[int, set[int]]
+        Maps each node to the set of pass indices containing it.
+    pass_node_sets : dict[int, set[int]]
+        Maps each pass index to the set of its nodes.
+    """
+    node_to_passes: Dict[int, Set[int]] = {}
+    pass_node_sets: Dict[int, Set[int]] = {}
+
+    for pass_idx, nodes in print_passes.items():
+        pass_node_sets[pass_idx] = set(nodes)
+        for node in nodes:
+            if node not in node_to_passes:
+                node_to_passes[node] = set()
+            node_to_passes[node].add(pass_idx)
+
+    return node_to_passes, pass_node_sets
+
+
+def _build_endpoint_indices(
+    print_passes: Dict[int, List[int]],
+) -> Tuple[Dict[int, Set[int]], Dict[int, Set[int]]]:
+    """Build indices mapping first/last nodes to their pass indices.
+
+    Used exclusively by condition 3 (parent_to_neighbor) which only checks
+    endpoints, not interior nodes.
+
+    Returns
+    -------
+    first_node_to_passes : dict[int, set[int]]
+        Maps each node to passes where it is the first element.
+    last_node_to_passes : dict[int, set[int]]
+        Maps each node to passes where it is the last element.
+    """
+    first_node_to_passes: Dict[int, Set[int]] = {}
+    last_node_to_passes: Dict[int, Set[int]] = {}
+
+    for pass_idx, nodes in print_passes.items():
+        if not nodes:
+            continue
+        first = nodes[0]
+        last = nodes[-1]
+        if first not in first_node_to_passes:
+            first_node_to_passes[first] = set()
+        first_node_to_passes[first].add(pass_idx)
+        if last not in last_node_to_passes:
+            last_node_to_passes[last] = set()
+        last_node_to_passes[last].add(pass_idx)
+
+    return first_node_to_passes, last_node_to_passes
 
 
 # ---------------------------------------------------------------------------
@@ -115,9 +178,10 @@ def find_disconnects(
     # ------------------------------------------------------------------
     # Step 2: Potentially disconnected = endpoints appearing exactly once
     # ------------------------------------------------------------------
+    endpoint_counts = Counter(processed_endpoints)
     disconnected: List[int] = []
     for node in processed_endpoints:
-        if processed_endpoints.count(node) == 1:
+        if endpoint_counts[node] == 1:
             disconnected.append(node)
 
     logger.debug("Potentially disconnected: %s", disconnected)
@@ -135,18 +199,11 @@ def find_disconnects(
     # ------------------------------------------------------------------
     # Step 4: Check which passes each potentially disconnected node appears in
     # ------------------------------------------------------------------
-    potential_disconnect: Dict[int, List[int]] = {node: [] for node in disconnected}
+    node_to_passes, _ = _build_indices(print_passes)
 
-    for pass_idx in print_passes:
-        for node in disconnected:
-            if node in print_passes[pass_idx]:
-                for m in range(len(print_passes)):
-                    if node in print_passes[m]:
-                        potential_disconnect[node].append(m)
-
-    # Remove duplicates
-    for node in potential_disconnect:
-        potential_disconnect[node] = list(set(potential_disconnect[node]))
+    potential_disconnect: Dict[int, List[int]] = {}
+    for node in disconnected:
+        potential_disconnect[node] = list(node_to_passes.get(node, set()))
 
     # True disconnects: node appears in only one pass
     final_true_disconnect: Dict[int, List[int]] = {
@@ -174,15 +231,16 @@ def find_disconnects(
             if nbr == node:
                 continue
 
-            for pass_num in print_passes:
+            # Use index to find passes containing this neighbor
+            for pass_num in sorted(node_to_passes.get(nbr, set())):
                 # Case 1: neighbor in a DIFFERENT pass
-                if nbr in print_passes[pass_num] and pass_num != pass_of_node:
+                if pass_num != pass_of_node:
                     neighbor_locs[node].append(pass_num)
                     neighbor_index[node].append(print_passes[pass_num].index(nbr))
                     neighbor_to_connect[node].append(nbr)
 
                 # Case 2: neighbor in the SAME pass
-                if nbr in print_passes[pass_num] and pass_num == pass_of_node:
+                else:
                     idx = print_passes[pass_num].index(node)
                     pass_len = len(print_passes[pass_num])
 
@@ -351,6 +409,9 @@ def close_gaps_condition0(
     start_append: Dict[int, List[int]] = {}
     end_append: Dict[int, List[int]] = {}
 
+    # Build index once for all passes
+    node_to_passes, _ = _build_indices(print_passes)
+
     for i in range(1, len(print_passes)):
         first_node = print_passes[i][0]
         last_node = print_passes[i][-1]
@@ -362,39 +423,63 @@ def close_gaps_condition0(
         left_of_last = last_node - 1 if (last_node - 1) in graph[last_node] else arbitrary_val
         right_of_last = last_node + 1 if (last_node + 1) in graph[last_node] else arbitrary_val
 
-        for j in range(0, i):
-            for k in print_passes[j]:
-                already_added_to_single = 0
+        # Determine which targets to search for (skip if node is excluded)
+        first_targets: Set[int] = set()
+        if first_node not in branchpoint_list_keys and first_node not in endpoint_nodes:
+            if left_of_first != arbitrary_val:
+                first_targets.add(left_of_first)
+            if right_of_first != arbitrary_val:
+                first_targets.add(right_of_first)
 
-                # --- Handle FIRST NODE ---
-                if ((k == left_of_first or k == right_of_first)
-                        and first_node not in branchpoint_list_keys
-                        and first_node not in endpoint_nodes):
+        last_targets: Set[int] = set()
+        if last_node not in branchpoint_list_keys and last_node not in endpoint_nodes:
+            if left_of_last != arbitrary_val:
+                last_targets.add(left_of_last)
+            if right_of_last != arbitrary_val:
+                last_targets.add(right_of_last)
 
-                    if k in branchpoint_list:
-                        # k is a daughter node; find its partner
-                        partner = _find_daughter_partner(k, branch_dict, branchpoint_list)
-                        if partner != first_node:
-                            start_append[i] = [k]
-                            already_added_to_single = 1 if is_single else 0
-                        # If partner == first_node, do NOT append (ordering issue)
-                    else:
+        all_targets = first_targets | last_targets
+        if not all_targets:
+            continue
+
+        # Collect all candidate matches as (j, pos, k) from previous passes
+        candidates: List[Tuple[int, int, int]] = []
+        for target in all_targets:
+            for j in node_to_passes.get(target, set()):
+                if j < i:
+                    for pos, val in enumerate(print_passes[j]):
+                        if val == target:
+                            candidates.append((j, pos, target))
+
+        # Sort ascending to replicate original iteration order (last overwrite wins)
+        candidates.sort()
+
+        for _j, _pos, k in candidates:
+            already_added_to_single = 0
+
+            # --- Handle FIRST NODE ---
+            if k in first_targets:
+                if k in branchpoint_list:
+                    # k is a daughter node; find its partner
+                    partner = _find_daughter_partner(k, branch_dict, branchpoint_list)
+                    if partner != first_node:
                         start_append[i] = [k]
                         already_added_to_single = 1 if is_single else 0
+                    # If partner == first_node, do NOT append (ordering issue)
+                else:
+                    start_append[i] = [k]
+                    already_added_to_single = 1 if is_single else 0
 
-                # --- Handle LAST NODE ---
-                if ((k == left_of_last or k == right_of_last)
-                        and last_node not in branchpoint_list_keys
-                        and last_node not in endpoint_nodes):
-
-                    if k in branchpoint_list:
-                        partner = _find_daughter_partner(k, branch_dict, branchpoint_list)
-                        if partner != last_node:
-                            if already_added_to_single == 0:
-                                end_append[i] = [k]
-                    else:
+            # --- Handle LAST NODE ---
+            if k in last_targets:
+                if k in branchpoint_list:
+                    partner = _find_daughter_partner(k, branch_dict, branchpoint_list)
+                    if partner != last_node:
                         if already_added_to_single == 0:
                             end_append[i] = [k]
+                else:
+                    if already_added_to_single == 0:
+                        end_append[i] = [k]
 
     # Apply appends
     for i in start_append:
@@ -471,6 +556,9 @@ def close_gaps_branchpoint(
     append_first: Dict[int, int] = {}
     append_last: Dict[int, int] = {}
 
+    # Build index once for all passes
+    node_to_passes, _ = _build_indices(print_passes)
+
     if direction == "backwards":
         pass_range = range(1, len(print_passes))
     else:
@@ -490,17 +578,17 @@ def close_gaps_branchpoint(
                 first_point, branch_dict, branchpoint_list, repeat_daughters,
             )
             if associated_branch is not None:
-                search_range = (
-                    range(0, i) if direction == "backwards"
-                    else range(i + 1, len(print_passes))
-                )
-                for j in search_range:
-                    for k in print_passes[j]:
-                        if int(associated_branch) == k:
-                            if second_point is not None and second_point != int(associated_branch):
-                                append_first[i] = k
-                            elif second_point is None:
-                                append_first[i] = k
+                target = int(associated_branch)
+                matching_passes = node_to_passes.get(target, set())
+                if direction == "backwards":
+                    found = any(j < i for j in matching_passes)
+                else:
+                    found = any(j > i for j in matching_passes)
+                if found:
+                    if second_point is not None and second_point != target:
+                        append_first[i] = target
+                    elif second_point is None:
+                        append_first[i] = target
 
         # --- LAST NODE: check if daughter ---
         if last_point in branchpoint_list:
@@ -508,15 +596,15 @@ def close_gaps_branchpoint(
                 last_point, branch_dict, branchpoint_list, repeat_daughters,
             )
             if associated_branch is not None:
-                search_range = (
-                    range(0, i) if direction == "backwards"
-                    else range(i + 1, len(print_passes))
-                )
-                for j in search_range:
-                    for k in print_passes[j]:
-                        if int(associated_branch) == k and not is_single:
-                            if second_to_last is not None and second_to_last != int(associated_branch):
-                                append_last[i] = k
+                target = int(associated_branch)
+                matching_passes = node_to_passes.get(target, set())
+                if direction == "backwards":
+                    found = any(j < i for j in matching_passes)
+                else:
+                    found = any(j > i for j in matching_passes)
+                if found and not is_single:
+                    if second_to_last is not None and second_to_last != target:
+                        append_last[i] = target
 
     # Apply appends
     label = "backwards" if direction == "backwards" else "forwards"
@@ -545,6 +633,9 @@ def _close_gaps_parent_to_neighbor_with_graph(
     append_end: Dict[int, List[int]] = {}
     append_start: Dict[int, List[int]] = {}
 
+    # Build endpoint-only indices (condition 3 only checks first/last nodes)
+    first_node_to_passes, last_node_to_passes = _build_endpoint_indices(print_passes)
+
     for i in range(1, len(print_passes)):
         first_point_curr = print_passes[i][0]
 
@@ -561,13 +652,16 @@ def _close_gaps_parent_to_neighbor_with_graph(
             continue
         non_daughter_neighbor = removed[0]
 
-        for j in range(0, i):
-            last_point_prev = print_passes[j][-1]
-            first_point_prev = print_passes[j][0]
+        # Use endpoint indices instead of scanning all previous passes
+        matched_last = last_node_to_passes.get(non_daughter_neighbor, set())
+        matched_first = first_node_to_passes.get(non_daughter_neighbor, set())
 
-            if non_daughter_neighbor == last_point_prev:
+        for j in matched_last:
+            if j < i:
                 append_end[j] = [first_point_curr]
-            elif non_daughter_neighbor == first_point_prev:
+
+        for j in matched_first:
+            if j < i and j not in matched_last:  # elif: skip if already matched as last
                 append_start[j] = [first_point_curr]
 
     # Apply appends
@@ -721,20 +815,18 @@ def _remove_redundant_single_node_passes(
     printed in a different pass.  Mark such passes with
     ``[arbitrary_val, arbitrary_val]`` for later removal.
     """
+    # Build index once; track mutated passes to preserve order-dependent behavior
+    node_to_passes, _ = _build_indices(print_passes)
+    mutated: Set[int] = set()
+
     for i in print_passes:
         if len(print_passes[i]) == 1:
             node = print_passes[i][0]
-            # Check previous passes
-            for j in range(0, i):
-                if node in print_passes[j]:
-                    print_passes[i] = [arbitrary_val, arbitrary_val]
-                    break
-            # Check subsequent passes (only if not already marked)
-            if print_passes[i][0] != arbitrary_val:
-                for k in range(i + 1, len(print_passes)):
-                    if node in print_passes[k]:
-                        print_passes[i] = [arbitrary_val, arbitrary_val]
-                        break
+            # Check if node appears in any other non-mutated pass
+            passes_with_node = node_to_passes.get(node, set()) - {i} - mutated
+            if passes_with_node:
+                print_passes[i] = [arbitrary_val, arbitrary_val]
+                mutated.add(i)
 
     return print_passes
 
