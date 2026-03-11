@@ -50,6 +50,7 @@ st.markdown(
     "Upload your input files, configure parameters in the sidebar, then click "
     "**Run X-CAVATE**."
 )
+st.caption("**SM** = single-material \u00a0|\u00a0 **MM** = multimaterial")
 
 st.divider()
 
@@ -437,6 +438,7 @@ with st.sidebar:
         else:
             close_mm_pass_upload = None
             close_mm_delta_upload = None
+
 
 
 # ---------------------------------------------------------------------------
