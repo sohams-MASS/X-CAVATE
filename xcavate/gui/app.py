@@ -59,6 +59,18 @@ st.divider()
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
+    # User guide download
+    _guide_path = Path(__file__).resolve().parent.parent.parent / "docs" / "user_guide.pdf"
+    if _guide_path.exists():
+        st.download_button(
+            label="Download User Guide (PDF)",
+            data=_guide_path.read_bytes(),
+            file_name="user_guide.pdf",
+            mime="application/pdf",
+            key="dl_user_guide",
+        )
+        st.divider()
+
     st.header("Input Files")
 
     network_upload = st.file_uploader(
@@ -132,6 +144,82 @@ with st.sidebar:
 
     st.divider()
     st.header("Optional Parameters")
+
+    # -- Advanced --
+    with st.expander("Advanced"):
+        custom_gcode = st.toggle(
+            "Custom G-code",
+            value=False,
+            help="Enable to provide custom G-code templates for header, "
+                 "extrusion start/stop, pressure, and dwell sections.",
+        )
+        _algo_labels = {
+            "DFS": PathfindingAlgorithm.DFS,
+            "Sweep Line": PathfindingAlgorithm.SWEEP_LINE,
+        }
+        algo_label = st.selectbox(
+            "Pathfinding algorithm",
+            options=list(_algo_labels.keys()),
+            index=0,
+            help="DFS: thorough collision detection via depth-first search. Sweep Line: faster bottom-up approach for large networks.",
+        )
+        algorithm = _algo_labels[algo_label]
+        num_overlap = st.number_input(
+            "Overlap nodes", min_value=0, value=0, step=1,
+            help="Number of nodes to retrace at pass boundaries to bridge small gaps. Use 0 to disable.",
+        )
+        _overlap_algo_labels = {
+            "Retrace (original)": OverlapAlgorithm.RETRACE,
+            "Consecutive (fast)": OverlapAlgorithm.CONSECUTIVE,
+        }
+        overlap_algo_label = st.selectbox(
+            "Overlap algorithm",
+            options=list(_overlap_algo_labels.keys()),
+            index=0,
+            help="'Retrace' scans all previous passes for shared nodes (original behavior). "
+                 "'Consecutive' only checks adjacent pass pairs (faster).",
+        )
+        overlap_algorithm = _overlap_algo_labels[overlap_algo_label]
+        generate_plots = st.toggle(
+            "Generate plots", value=True,
+            help="Create interactive 3D HTML visualizations of the network and print passes in the output folder.",
+        )
+        speed_calc = st.toggle(
+            "Speed calculation", value=False,
+            help="Compute per-node print speed from vessel radius and flow rate instead of using a fixed print speed.",
+        )
+        close_sm = st.toggle(
+            "Gap closure (single-material)", value=False,
+            help="Load gap closure extension files for single-material prints from the inputs/extension directory.",
+        )
+        if close_sm:
+            close_sm_pass_upload = st.file_uploader(
+                "Pass indices (SM)", type=["txt"], key="close_sm_pass",
+                help="Text file listing pass indices to extend (one per line). View X-CAVATE manual for more information.",
+            )
+            close_sm_delta_upload = st.file_uploader(
+                "Deltas (SM)", type=["txt"], key="close_sm_delta",
+                help="Text file with extension deltas (x y z per line). View X-CAVATE manual for more information.",
+            )
+        else:
+            close_sm_pass_upload = None
+            close_sm_delta_upload = None
+        close_mm = st.toggle(
+            "Gap closure (multimaterial)", value=False,
+            help="Load gap closure extension files for multimaterial prints from the inputs/extension directory.",
+        )
+        if close_mm:
+            close_mm_pass_upload = st.file_uploader(
+                "Pass indices (MM)", type=["txt"], key="close_mm_pass",
+                help="Text file listing pass indices to extend (one per line). View X-CAVATE manual for more information.",
+            )
+            close_mm_delta_upload = st.file_uploader(
+                "Deltas (MM)", type=["txt"], key="close_mm_delta",
+                help="Text file with extension deltas (x y z per line). View X-CAVATE manual for more information.",
+            )
+        else:
+            close_mm_pass_upload = None
+            close_mm_delta_upload = None
 
     # -- Tolerancing --
     with st.expander("Tolerancing"):
@@ -363,93 +451,6 @@ with st.sidebar:
             positive_ink_end_arterial = 0.0
             positive_ink_end_venous = 0.0
 
-    # -- Advanced --
-    with st.expander("Advanced"):
-        custom_gcode = st.toggle(
-            "Custom G-code",
-            value=False,
-            help="Enable to provide custom G-code templates for header, "
-                 "extrusion start/stop, pressure, and dwell sections.",
-        )
-        _algo_labels = {
-            "DFS": PathfindingAlgorithm.DFS,
-            "Sweep Line": PathfindingAlgorithm.SWEEP_LINE,
-        }
-        algo_label = st.selectbox(
-            "Pathfinding algorithm",
-            options=list(_algo_labels.keys()),
-            index=0,
-            help="DFS: thorough collision detection via depth-first search. Sweep Line: faster bottom-up approach for large networks.",
-        )
-        algorithm = _algo_labels[algo_label]
-        num_overlap = st.number_input(
-            "Overlap nodes", min_value=0, value=0, step=1,
-            help="Number of nodes to retrace at pass boundaries to bridge small gaps. Use 0 to disable.",
-        )
-        _overlap_algo_labels = {
-            "Retrace (original)": OverlapAlgorithm.RETRACE,
-            "Consecutive (fast)": OverlapAlgorithm.CONSECUTIVE,
-        }
-        overlap_algo_label = st.selectbox(
-            "Overlap algorithm",
-            options=list(_overlap_algo_labels.keys()),
-            index=0,
-            help="'Retrace' scans all previous passes for shared nodes (original behavior). "
-                 "'Consecutive' only checks adjacent pass pairs (faster).",
-        )
-        overlap_algorithm = _overlap_algo_labels[overlap_algo_label]
-        generate_plots = st.toggle(
-            "Generate plots", value=True,
-            help="Create interactive 3D HTML visualizations of the network and print passes in the output folder.",
-        )
-        speed_calc = st.toggle(
-            "Speed calculation", value=False,
-            help="Compute per-node print speed from vessel radius and flow rate instead of using a fixed print speed.",
-        )
-        close_sm = st.toggle(
-            "Gap closure (single-material)", value=False,
-            help="Load gap closure extension files for single-material prints from the inputs/extension directory.",
-        )
-        if close_sm:
-            close_sm_pass_upload = st.file_uploader(
-                "Pass indices (SM)", type=["txt"], key="close_sm_pass",
-                help="Text file listing pass indices to extend (one per line). View X-CAVATE manual for more information.",
-            )
-            close_sm_delta_upload = st.file_uploader(
-                "Deltas (SM)", type=["txt"], key="close_sm_delta",
-                help="Text file with extension deltas (x y z per line). View X-CAVATE manual for more information.",
-            )
-        else:
-            close_sm_pass_upload = None
-            close_sm_delta_upload = None
-        close_mm = st.toggle(
-            "Gap closure (multimaterial)", value=False,
-            help="Load gap closure extension files for multimaterial prints from the inputs/extension directory.",
-        )
-        if close_mm:
-            close_mm_pass_upload = st.file_uploader(
-                "Pass indices (MM)", type=["txt"], key="close_mm_pass",
-                help="Text file listing pass indices to extend (one per line). View X-CAVATE manual for more information.",
-            )
-            close_mm_delta_upload = st.file_uploader(
-                "Deltas (MM)", type=["txt"], key="close_mm_delta",
-                help="Text file with extension deltas (x y z per line). View X-CAVATE manual for more information.",
-            )
-        else:
-            close_mm_pass_upload = None
-            close_mm_delta_upload = None
-
-    # User guide download
-    _guide_path = Path(__file__).resolve().parent.parent.parent / "docs" / "user_guide.pdf"
-    if _guide_path.exists():
-        st.divider()
-        st.download_button(
-            label="Download User Guide (PDF)",
-            data=_guide_path.read_bytes(),
-            file_name="user_guide.pdf",
-            mime="application/pdf",
-            key="dl_user_guide",
-        )
 
 
 # ---------------------------------------------------------------------------
