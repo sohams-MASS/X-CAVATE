@@ -285,7 +285,7 @@ Incorporating time delays ("dwells") at the first and last node of each print pa
    1. Network importation
    2. Interpolation of network coordinates
    3. Graph generation and branchpoint detection
-   4. DFS/Sweep Line algorithm to generate print passes
+   4. DFS algorithm to generate print passes
    5. Subdivision and gap closure
    6. (If multimaterial) Multimaterial pass generation
    7. (If speed_calc) Print speed calculation
@@ -322,7 +322,7 @@ Incorporating time delays ("dwells") at the first and last node of each print pa
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--algorithm` | `dfs` | `dfs` or `sweep_line` |
+| `--algorithm` | `dfs` | Pathfinding algorithm: `dfs` |
 | `--output_dir` | `outputs` | Output directory |
 | `--flow` | `0.127` | Volumetric flow rate (mm^3/s) |
 | `--print_speed` | `1.0` | Print speed (mm/s) |

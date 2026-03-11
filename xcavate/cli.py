@@ -112,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # --- New flags (not in original) ---
     p.add_argument("--algorithm", type=str, default="dfs",
-                    choices=["dfs", "sweep_line"],
+                    choices=["dfs"],
                     help="Pathfinding algorithm (default: dfs)")
     p.add_argument("--output_dir", type=str, default="outputs",
                     help="Output directory (default: outputs)")

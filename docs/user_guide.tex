@@ -505,7 +505,7 @@ When \gui{Separate arterial/venous} is \textbf{on}, four fields appear instead:
 \textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
 \midrule
 \gui{Custom G-code} & toggle & Off & Enable to provide custom G-code templates (reveals the Custom G-code tab). \\
-\gui{Pathfinding algorithm} & select & DFS & DFS: thorough collision detection via depth-first search. Sweep Line: faster bottom-up approach for large networks. \\
+\gui{Pathfinding algorithm} & select & DFS & DFS: modified depth-first search with KD-tree collision detection. \\
 \gui{Overlap nodes} & int & 0 & Number of nodes to retrace at pass boundaries to bridge small gaps. \\
 \gui{Overlap algorithm} & select & Retrace & ``Retrace'' scans all previous passes (original). ``Consecutive'' checks adjacent pairs (faster). \\
 \gui{Generate plots} & toggle & On & Create interactive 3D HTML visualizations. \\
@@ -878,7 +878,7 @@ Inlet/outlet matching warnings &
 Inlet/outlet coordinates are approximate. X-CAVATE matches to the nearest network point and logs the distance. Verify the matches are reasonable. \\
 \midrule
 Pipeline hangs on large networks &
-Reduce coordinates per vessel to 100 or fewer, or enable downsampling. The Sweep Line algorithm may also be faster for very large networks. \\
+Reduce coordinates per vessel to 100 or fewer, or enable downsampling. \\
 \midrule
 \code{ModuleNotFoundError} &
 Run \code{pip install ".[gui]"} to install all dependencies, or recreate the conda environment. \\

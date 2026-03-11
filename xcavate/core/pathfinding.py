@@ -1,18 +1,16 @@
-"""Collision-aware pathfinding strategies for vascular network printing.
+"""Collision-aware pathfinding for vascular network printing.
 
 This module refactors the pathfinding logic from xcavate.py (lines 911-981)
-into a clean, extensible architecture with two concrete strategies:
+into a clean architecture:
 
 - **DFS strategy** -- modified depth-first search with collision validity
   checking.  Nodes are printed starting from the lowest unvisited node,
   traversing the graph via DFS while skipping nodes that would collide
   with unprinted nodes beneath them.
-- **Sweep-line strategy** -- a bottom-up sweep that processes nodes in
-  ascending z-order, tracing vessel paths upward along graph edges.
 
-Both strategies share a common :class:`CollisionDetector` backed by
-:class:`scipy.spatial.cKDTree` for O(k log N) spatial queries, replacing
-the original O(N) brute-force validity check.
+The :class:`CollisionDetector` is backed by :class:`scipy.spatial.cKDTree`
+for O(k log N) spatial queries, replacing the original O(N) brute-force
+validity check.
 
 Usage
 -----
@@ -408,159 +406,6 @@ def iterative_dfs(
 
 
 # ---------------------------------------------------------------------------
-# Sweep-line strategy
-# ---------------------------------------------------------------------------
-
-class SweepLineStrategy(PathfindingStrategy):
-    """Bottom-up sweep-line approach for print-pass generation.
-
-    Algorithm
-    ---------
-    1. Sort all nodes by ascending z-coordinate.
-    2. Starting from the lowest node, greedily trace vessel paths
-       *upward* by following graph edges whose target nodes satisfy:
-       - The target is unvisited.
-       - The target's z-coordinate is >= the current node's z (upward
-         movement).
-       - No unvisited node in the XY shadow below the target blocks it.
-    3. When no upward continuation exists, close the current pass and
-       start a new one from the next lowest unvisited node.
-
-    Because the traversal is strictly upward, most collision checks are
-    naturally satisfied, making this strategy efficient for networks with
-    predominantly vertical vessel segments.
-    """
-
-    def generate_print_passes(
-        self,
-        graph: Graph,
-        points: NDArray[np.floating],
-        nozzle_radius: float,
-        tolerance: float = 0.0,
-        tolerance_flag: bool = False,
-    ) -> Dict[int, List[int]]:
-        """Generate print passes via bottom-up sweep-line traversal.
-
-        Parameters
-        ----------
-        graph : dict[int, list[int]]
-        points : ndarray of shape (N, 3)
-        nozzle_radius : float
-        tolerance : float
-        tolerance_flag : bool
-
-        Returns
-        -------
-        dict[int, list[int]]
-            Ordered mapping of pass index to node visit order.
-        """
-        detector = CollisionDetector(
-            points,
-            nozzle_radius,
-            tolerance=tolerance,
-            tolerance_flag=tolerance_flag,
-        )
-
-        n_nodes = points.shape[0]
-
-        # Sort nodes by ascending z-coordinate (stable sort preserves
-        # original ordering for ties)
-        z_order = np.argsort(points[:, 2], kind="stable")
-
-        # Pointer into z_order for fast "next lowest unvisited" lookup
-        z_ptr = 0
-
-        print_passes: Dict[int, List[int]] = {}
-        pass_idx = 0
-
-        while detector.has_unvisited():
-            # Advance pointer past visited nodes
-            while z_ptr < n_nodes and detector.is_visited(z_order[z_ptr]):
-                z_ptr += 1
-            if z_ptr >= n_nodes:
-                break
-
-            start_node = int(z_order[z_ptr])
-            pass_list = self._trace_upward(
-                graph, points, start_node, detector
-            )
-
-            if pass_list:
-                print_passes[pass_idx] = pass_list
-                pass_idx += 1
-
-        logger.info(
-            "Sweep-line pathfinding complete: %d print passes generated",
-            pass_idx,
-        )
-        return print_passes
-
-    @staticmethod
-    def _trace_upward(
-        graph: Graph,
-        points: NDArray[np.floating],
-        start_node: int,
-        detector: CollisionDetector,
-    ) -> List[int]:
-        """Trace a single upward pass from *start_node*.
-
-        Greedily follows graph edges to unvisited neighbours with
-        z >= current z, preferring the neighbour with the smallest z
-        increase (most gradual ascent) to maximise contiguous printing.
-
-        Parameters
-        ----------
-        graph : dict[int, list[int]]
-        points : ndarray of shape (N, 3)
-        start_node : int
-        detector : CollisionDetector
-
-        Returns
-        -------
-        list[int]
-            Nodes visited in ascending-z order.
-        """
-        pass_list: List[int] = []
-        current = start_node
-
-        while True:
-            if detector.is_visited(current):
-                break
-            if not detector.is_valid(current):
-                break
-
-            detector.mark_visited(current)
-            pass_list.append(current)
-
-            current_z = points[current, 2]
-
-            # Find the best upward neighbour: unvisited, z >= current_z,
-            # valid, and with the smallest z increment
-            best_next = None
-            best_dz = np.inf
-
-            for nbr in graph[current]:
-                if nbr == current:
-                    continue  # skip self-loop
-                if detector.is_visited(nbr):
-                    continue
-                nbr_z = points[nbr, 2]
-                if nbr_z < current_z:
-                    continue  # only go upward
-                dz = nbr_z - current_z
-                if dz < best_dz and detector.is_valid(nbr):
-                    best_dz = dz
-                    best_next = nbr
-
-            if best_next is None:
-                break  # no valid upward continuation
-
-            current = best_next
-
-        return pass_list
-
-
-# ---------------------------------------------------------------------------
 # Convenience entry point
 # ---------------------------------------------------------------------------
 
@@ -584,7 +429,7 @@ def generate_print_passes(
     config : XcavateConfig
         Runtime configuration.  The following fields are used:
 
-        - ``config.algorithm`` -- selects DFS or sweep-line strategy.
+        - ``config.algorithm`` -- selects the pathfinding strategy (DFS).
         - ``config.nozzle_radius`` -- half the nozzle outer diameter.
         - ``config.tolerance`` -- 3-D proximity tolerance.
         - ``config.tolerance_flag`` -- whether to apply the tolerance
@@ -605,8 +450,6 @@ def generate_print_passes(
 
     if config.algorithm == PathfindingAlgorithm.DFS:
         strategy: PathfindingStrategy = DFSStrategy()
-    elif config.algorithm == PathfindingAlgorithm.SWEEP_LINE:
-        strategy = SweepLineStrategy()
     else:
         raise ValueError(f"Unknown pathfinding algorithm: {config.algorithm}")
 

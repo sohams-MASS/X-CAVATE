@@ -16,7 +16,6 @@ class PrinterType(Enum):
 class PathfindingAlgorithm(Enum):
     """Available pathfinding strategies."""
     DFS = "dfs"                # Modified depth-first search (original algorithm)
-    SWEEP_LINE = "sweep_line"  # Bottom-up sweep-line approach
 
 
 class OverlapAlgorithm(Enum):

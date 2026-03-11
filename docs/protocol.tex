@@ -336,7 +336,7 @@ streamlit run xcavate/gui/app.py
         \item Reading network and inlet/outlet files
         \item Interpolating network to nozzle resolution
         \item Building adjacency graph and detecting branchpoints
-        \item Generating collision-free print passes (DFS or sweep-line)
+        \item Generating collision-free print passes (DFS)
         \item Post-processing: subdivision, gap closure, overlap
         \item Processing multimaterial passes (if enabled)
         \item Writing output files and G-code
@@ -488,7 +488,7 @@ These settings only apply when \gui{Printer type} is set to \textbf{Positive Ink
 \textbf{Widget} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
 \midrule
 \gui{Custom G-code} & Toggle & Off & Enable custom G-code templates. When on, a tabbed editor appears in the main area with four tabs: \textbf{Header}, \textbf{Single Material}, \textbf{Multimaterial}, \textbf{Dwell}. Paste your G-code snippets into the text areas (see Part~C). \\
-\gui{Pathfinding algorithm} & Selectbox & DFS & \textbf{DFS}: modified depth-first search (original algorithm). \textbf{Sweep Line}: bottom-up sweep-line approach (alternative). \\
+\gui{Pathfinding algorithm} & Selectbox & DFS & \textbf{DFS}: modified depth-first search with KD-tree collision detection. \\
 \gui{Overlap nodes} & Integer & 0 & Number of overlap nodes to add at pass junctions (0 = disabled). Improves print continuity at branchpoints. \\
 \gui{Overlap algorithm} & Selectbox & Retrace & Only visible when overlap $> 0$. \textbf{Retrace (original)}: scans all previous passes for shared nodes, retraces backwards, appends to end of current pass. \textbf{Consecutive (fast)}: checks only adjacent pass pairs, prepends to start of next pass. \\
 \gui{Generate plots} & Toggle & On & Generate interactive 3D Plotly visualizations. \\

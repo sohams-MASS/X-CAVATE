@@ -155,17 +155,7 @@ with st.sidebar:
             help="Enable to provide custom G-code templates for header, "
                  "extrusion start/stop, pressure, and dwell sections.",
         )
-        _algo_labels = {
-            "DFS": PathfindingAlgorithm.DFS,
-            "Sweep Line": PathfindingAlgorithm.SWEEP_LINE,
-        }
-        algo_label = st.selectbox(
-            "Pathfinding algorithm",
-            options=list(_algo_labels.keys()),
-            index=0,
-            help="DFS: thorough collision detection via depth-first search. Sweep Line: faster bottom-up approach for large networks.",
-        )
-        algorithm = _algo_labels[algo_label]
+        algorithm = PathfindingAlgorithm.DFS
         num_overlap = st.number_input(
             "Overlap nodes", min_value=0, value=0, step=1,
             help="Number of nodes to retrace at pass boundaries to bridge small gaps. Use 0 to disable.",

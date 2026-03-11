@@ -35,7 +35,7 @@ The pipeline performs seven steps:
 | 1 | Read and preprocess network geometry |
 | 2 | Interpolate to nozzle-radius resolution |
 | 3 | Build the vascular adjacency graph |
-| 4 | Generate collision-free print passes (DFS or Sweep Line) |
+| 4 | Generate collision-free print passes (DFS) |
 | 5 | Subdivide, gap-close, downsample, overlap, and reorder passes |
 | 6 | (Optional) Multimaterial arterial/venous splitting |
 | 7 | Write coordinate outputs, plots, and G-code |
@@ -44,7 +44,7 @@ The pipeline performs seven steps:
 - KD-tree spatial indexing for collision detection (100-1000x speedup)
 - Batch interpolation (10-50x speedup)
 - Modular codebase (~1,300 lines across focused modules vs. ~11,200 lines)
-- Multiple pathfinding algorithms (DFS + Sweep Line)
+- DFS pathfinding algorithm with KD-tree collision detection
 - Web GUI for non-technical users
 - pip installable + Docker deployable
 
@@ -374,7 +374,7 @@ xcavate \
   --plots 1 \
   --downsample 0 \
   --custom 1 \
-  --algorithm sweep_line \
+  --algorithm dfs \
   --output_dir my_output \
   --scale_factor 1.0 \
   --print_speed 2.0 \
@@ -536,7 +536,7 @@ The pipeline loads all `.txt` template files from `custom_gcode_dir`. Any missin
 
 | Parameter | CLI Flag | Default | Description |
 |-----------|----------|---------|-------------|
-| `algorithm` | `--algorithm` | `dfs` | Pathfinding: `dfs` or `sweep_line` |
+| `algorithm` | `--algorithm` | `dfs` | Pathfinding algorithm: `dfs` |
 | `output_dir` | `--output_dir` | `outputs` | Output directory path |
 | `tolerance` | `--tolerance` | 0 | Tolerance amount (mm) |
 | `scale_factor` | `--scale_factor` | 1.0 | Network scale multiplier |
@@ -593,12 +593,9 @@ The pipeline loads all `.txt` template files from `custom_gcode_dir`. Any missin
 | 1 | Positive Ink | Positive ink displacement |
 | 2 | Aerotech | Aerotech 6-axis motion controller |
 
-### Pathfinding Algorithms
+### Pathfinding Algorithm
 
-| Name | CLI Value | Description |
-|------|-----------|-------------|
-| DFS | `dfs` | Depth-first search from lowest unvisited node with KD-tree collision detection. Default. |
-| Sweep Line | `sweep_line` | Sort by z, trace upward. Naturally collision-free for upward printing. May produce fewer, longer passes. |
+X-CAVATE uses a modified depth-first search (DFS) from the lowest unvisited node with KD-tree collision detection.
 
 ---
 
@@ -643,7 +640,7 @@ X-CAVATE/
 │   ├── core/                    # Core algorithms
 │   │   ├── preprocessing.py     # Batch interpolation (O(n) vs original O(n^2))
 │   │   ├── graph.py             # Graph construction + KD-tree branchpoint detection
-│   │   ├── pathfinding.py       # DFS + Sweep Line with KD-tree collision detection
+│   │   ├── pathfinding.py       # DFS with KD-tree collision detection
 │   │   ├── gap_closure.py       # Unified gap closure pipeline
 │   │   ├── postprocessing.py    # Subdivision, downsampling, overlap, reordering
 │   │   └── multimaterial.py     # Arterial/venous classification
