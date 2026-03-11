@@ -251,44 +251,71 @@ with st.sidebar:
 
     # -- Positive Ink Displacement --
     with st.expander("Positive Ink Displacement"):
-        positive_ink_start = st.number_input(
-            "Start", min_value=0.0, value=0.0, step=0.1, format="%.2f",
-            key="pi_start",
+        positive_ink_radii = st.toggle(
+            "Use radii", value=False, key="pi_radii",
+            help="When enabled, uses per-node vessel radii from SimVascular data instead of a fixed diameter for extrusion calculations.",
         )
-        positive_ink_end = st.number_input(
-            "End", min_value=0.0, value=0.0, step=0.1, format="%.2f",
-            key="pi_end",
-        )
-        positive_ink_radii = st.toggle("Use radii", value=False, key="pi_radii")
         positive_ink_diam = st.number_input(
             "Diameter", min_value=0.001, value=1.0, step=0.1, format="%.3f",
             key="pi_diam",
+            help="Fixed vessel diameter (mm) used for extrusion calculations when 'Use radii' is off.",
         )
         positive_ink_syringe_diam = st.number_input(
             "Syringe diameter", min_value=0.001, value=1.0, step=0.1, format="%.3f",
             key="pi_syr_diam",
+            help="Inner diameter (mm) of the syringe barrel. Used to compute plunger displacement from vessel geometry.",
         )
         positive_ink_factor = st.number_input(
             "Factor", min_value=0.0, value=1.0, step=0.1, format="%.3f",
             key="pi_factor",
+            help="Scaling multiplier for computed extrusion amounts. Use 1.0 for default; increase to extrude more ink per unit length.",
         )
-        st.markdown("**Arterial / Venous overrides**")
-        positive_ink_start_arterial = st.number_input(
-            "Start (arterial)", min_value=0.0, value=0.0, step=0.1, format="%.2f",
-            key="pi_start_art",
+
+        separate_artven = st.toggle(
+            "Separate arterial / venous",
+            value=False,
+            key="pi_separate_artven",
+            help="Enable to set different start/end displacements for arterial and venous syringes in multimaterial prints.",
         )
-        positive_ink_start_venous = st.number_input(
-            "Start (venous)", min_value=0.0, value=0.0, step=0.1, format="%.2f",
-            key="pi_start_ven",
-        )
-        positive_ink_end_arterial = st.number_input(
-            "End (arterial)", min_value=0.0, value=0.0, step=0.1, format="%.2f",
-            key="pi_end_art",
-        )
-        positive_ink_end_venous = st.number_input(
-            "End (venous)", min_value=0.0, value=0.0, step=0.1, format="%.2f",
-            key="pi_end_ven",
-        )
+
+        if separate_artven:
+            positive_ink_start = 0.0
+            positive_ink_end = 0.0
+            positive_ink_start_arterial = st.number_input(
+                "Start (arterial)", min_value=0.0, value=0.0, step=0.1, format="%.2f",
+                key="pi_start_art",
+                help="Plunger displacement (mm) for the arterial syringe at the start of each pass. Typical values: 0.0\u20131.0 mm.",
+            )
+            positive_ink_start_venous = st.number_input(
+                "Start (venous)", min_value=0.0, value=0.0, step=0.1, format="%.2f",
+                key="pi_start_ven",
+                help="Plunger displacement (mm) for the venous syringe at the start of each pass. Typical values: 0.0\u20131.0 mm.",
+            )
+            positive_ink_end_arterial = st.number_input(
+                "End (arterial)", min_value=-10.0, value=0.0, step=0.1, format="%.2f",
+                key="pi_end_art",
+                help="Plunger displacement (mm) for the arterial syringe at the end of each pass. Typical values: -1.0 to 0.0 mm (negative retracts).",
+            )
+            positive_ink_end_venous = st.number_input(
+                "End (venous)", min_value=-10.0, value=0.0, step=0.1, format="%.2f",
+                key="pi_end_ven",
+                help="Plunger displacement (mm) for the venous syringe at the end of each pass. Typical values: -1.0 to 0.0 mm (negative retracts).",
+            )
+        else:
+            positive_ink_start = st.number_input(
+                "Start", min_value=0.0, value=0.0, step=0.1, format="%.2f",
+                key="pi_start",
+                help="Plunger displacement (mm) added at the start of each print pass to prime ink flow. Typical values: 0.0\u20131.0 mm. Use 0.0 to disable.",
+            )
+            positive_ink_end = st.number_input(
+                "End", min_value=-10.0, value=0.0, step=0.1, format="%.2f",
+                key="pi_end",
+                help="Plunger displacement (mm) added at the end of each print pass for retraction. Typical values: -1.0 to 0.0 mm (negative retracts the plunger). Use 0.0 to disable.",
+            )
+            positive_ink_start_arterial = 0.0
+            positive_ink_start_venous = 0.0
+            positive_ink_end_arterial = 0.0
+            positive_ink_end_venous = 0.0
 
     # -- Advanced --
     with st.expander("Advanced"):
@@ -376,10 +403,10 @@ def _build_config(
         positive_ink_diam=positive_ink_diam,
         positive_ink_syringe_diam=positive_ink_syringe_diam,
         positive_ink_factor=positive_ink_factor,
-        positive_ink_start_arterial=positive_ink_start_arterial,
-        positive_ink_start_venous=positive_ink_start_venous,
-        positive_ink_end_arterial=positive_ink_end_arterial,
-        positive_ink_end_venous=positive_ink_end_venous,
+        positive_ink_start_arterial=positive_ink_start_arterial if separate_artven else positive_ink_start,
+        positive_ink_start_venous=positive_ink_start_venous if separate_artven else positive_ink_start,
+        positive_ink_end_arterial=positive_ink_end_arterial if separate_artven else positive_ink_end,
+        positive_ink_end_venous=positive_ink_end_venous if separate_artven else positive_ink_end,
         custom_gcode=custom_gcode,
         algorithm=algorithm,
         num_overlap=num_overlap,
