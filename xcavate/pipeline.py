@@ -322,6 +322,8 @@ def run_xcavate(
         "print_passes_sm": print_passes_sm,
         "print_passes_mm": print_passes_mm,
         "points": points_interp,
+        "points_original": points,
+        "coord_num_dict_original": coord_num_dict,
         "changelog": changelog,
         "speed_map_sm": speed_map_sm,
         "speed_map_mm": speed_map_mm,

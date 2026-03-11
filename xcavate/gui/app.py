@@ -860,7 +860,17 @@ with main_tab:
         st.subheader("3D Visualization")
 
         if config_saved.generate_plots:
-            from xcavate.viz.plotting import create_network_plot
+            from xcavate.viz.plotting import create_network_plot, create_original_network_plot
+
+            # Original network plot
+            if result.get("points_original") is not None and result.get("coord_num_dict_original") is not None:
+                st.markdown("**Original Network**")
+                fig_orig = create_original_network_plot(
+                    result["points_original"],
+                    result["coord_num_dict_original"],
+                    title="Original Network",
+                )
+                st.plotly_chart(fig_orig, use_container_width=True)
 
             # Single-material plot
             if result.get("print_passes_sm") is not None and result.get("points") is not None:
