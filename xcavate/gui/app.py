@@ -740,307 +740,311 @@ if custom_gcode:
 
 
 # ---------------------------------------------------------------------------
-# Main area -- run button and results
+# Main area -- top-level tabs
 # ---------------------------------------------------------------------------
 
-run_button = st.button(
-    "Run X-CAVATE",
-    type="primary",
-    use_container_width=True,
-    disabled=(network_upload is None or inletoutlet_upload is None),
-)
+main_tab, cal_tab = st.tabs(["Pipeline", "Calibration Validation"])
 
-if network_upload is None or inletoutlet_upload is None:
-    st.info("Upload both a network file and an inlet/outlet file in the sidebar to get started.")
+with main_tab:
 
-if run_button:
-    # Create a temporary working directory
-    tmp_dir = Path(tempfile.mkdtemp(prefix="xcavate_"))
-    input_dir = tmp_dir / "inputs"
-    input_dir.mkdir()
-    output_dir = tmp_dir / "outputs"
-    output_dir.mkdir()
+    run_button = st.button(
+        "Run X-CAVATE",
+        type="primary",
+        use_container_width=True,
+        disabled=(network_upload is None or inletoutlet_upload is None),
+    )
 
-    # Save uploaded files
-    network_path = input_dir / "network.txt"
-    network_path.write_bytes(network_upload.getvalue())
+    if network_upload is None or inletoutlet_upload is None:
+        st.info("Upload both a network file and an inlet/outlet file in the sidebar to get started.")
 
-    inletoutlet_path = input_dir / "inletoutlet.txt"
-    inletoutlet_path.write_bytes(inletoutlet_upload.getvalue())
+    if run_button:
+        # Create a temporary working directory
+        tmp_dir = Path(tempfile.mkdtemp(prefix="xcavate_"))
+        input_dir = tmp_dir / "inputs"
+        input_dir.mkdir()
+        output_dir = tmp_dir / "outputs"
+        output_dir.mkdir()
 
-    # Write custom G-code templates to temp directory (if enabled)
-    custom_dir = input_dir / "custom"
-    if custom_gcode:
-        custom_dir.mkdir(exist_ok=True)
-        for _key, _meta in _CUSTOM_GCODE_FIELDS.items():
-            content = st.session_state.get(_key, "")
-            if content.strip():
-                (custom_dir / _meta["file"]).write_text(content)
+        # Save uploaded files
+        network_path = input_dir / "network.txt"
+        network_path.write_bytes(network_upload.getvalue())
 
-    # Save gap closure extension files (if enabled)
-    extension_dir = input_dir / "extension"
-    if close_sm or close_mm:
-        extension_dir.mkdir(exist_ok=True)
-    if close_sm:
-        if close_sm_pass_upload is not None:
-            (extension_dir / "pass_to_extend_SM.txt").write_bytes(close_sm_pass_upload.getvalue())
-        if close_sm_delta_upload is not None:
-            (extension_dir / "deltas_to_extend_SM.txt").write_bytes(close_sm_delta_upload.getvalue())
-    if close_mm:
-        if close_mm_pass_upload is not None:
-            (extension_dir / "pass_to_extend_MM.txt").write_bytes(close_mm_pass_upload.getvalue())
-        if close_mm_delta_upload is not None:
-            (extension_dir / "deltas_to_extend_MM.txt").write_bytes(close_mm_delta_upload.getvalue())
+        inletoutlet_path = input_dir / "inletoutlet.txt"
+        inletoutlet_path.write_bytes(inletoutlet_upload.getvalue())
 
-    # Build config
-    try:
-        config = _build_config(network_path, inletoutlet_path, output_dir)
-        # Point custom_gcode_dir to the temp directory where we wrote the files
-        config.custom_gcode_dir = custom_dir
-        config.extension_dir = extension_dir
-    except Exception as exc:
-        st.error(f"Invalid configuration: {exc}")
-        st.stop()
+        # Write custom G-code templates to temp directory (if enabled)
+        custom_dir = input_dir / "custom"
+        if custom_gcode:
+            custom_dir.mkdir(exist_ok=True)
+            for _key, _meta in _CUSTOM_GCODE_FIELDS.items():
+                content = st.session_state.get(_key, "")
+                if content.strip():
+                    (custom_dir / _meta["file"]).write_text(content)
 
-    # Progress bar and status
-    progress_bar = st.progress(0, text="Initializing...")
+        # Save gap closure extension files (if enabled)
+        extension_dir = input_dir / "extension"
+        if close_sm or close_mm:
+            extension_dir.mkdir(exist_ok=True)
+        if close_sm:
+            if close_sm_pass_upload is not None:
+                (extension_dir / "pass_to_extend_SM.txt").write_bytes(close_sm_pass_upload.getvalue())
+            if close_sm_delta_upload is not None:
+                (extension_dir / "deltas_to_extend_SM.txt").write_bytes(close_sm_delta_upload.getvalue())
+        if close_mm:
+            if close_mm_pass_upload is not None:
+                (extension_dir / "pass_to_extend_MM.txt").write_bytes(close_mm_pass_upload.getvalue())
+            if close_mm_delta_upload is not None:
+                (extension_dir / "deltas_to_extend_MM.txt").write_bytes(close_mm_delta_upload.getvalue())
 
-    def _progress_callback(step: int, description: str) -> None:
-        """Update the Streamlit progress bar from the pipeline."""
-        fraction = step / _TOTAL_STEPS
-        progress_bar.progress(fraction, text=f"Step {step}/{_TOTAL_STEPS}: {description}")
+        # Build config
+        try:
+            config = _build_config(network_path, inletoutlet_path, output_dir)
+            # Point custom_gcode_dir to the temp directory where we wrote the files
+            config.custom_gcode_dir = custom_dir
+            config.extension_dir = extension_dir
+        except Exception as exc:
+            st.error(f"Invalid configuration: {exc}")
+            st.stop()
 
-    # Run the pipeline
-    try:
-        from xcavate.pipeline import run_xcavate
+        # Progress bar and status
+        progress_bar = st.progress(0, text="Initializing...")
 
-        result = run_xcavate(config, progress_cb=_progress_callback)
-        progress_bar.progress(1.0, text="Complete!")
-        st.success("X-CAVATE finished successfully.")
+        def _progress_callback(step: int, description: str) -> None:
+            """Update the Streamlit progress bar from the pipeline."""
+            fraction = step / _TOTAL_STEPS
+            progress_bar.progress(fraction, text=f"Step {step}/{_TOTAL_STEPS}: {description}")
 
-        # Persist results in session state so downloads survive re-runs
-        st.session_state.pipeline_result = result
-        st.session_state.pipeline_config = config
-        st.session_state.pipeline_output_dir = str(output_dir)
-    except Exception as exc:
-        progress_bar.empty()
-        st.error(f"Pipeline failed: {exc}")
-        st.exception(exc)
-        # Clean up temp directory on failure
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        st.stop()
+        # Run the pipeline
+        try:
+            from xcavate.pipeline import run_xcavate
 
+            result = run_xcavate(config, progress_cb=_progress_callback)
+            progress_bar.progress(1.0, text="Complete!")
+            st.success("X-CAVATE finished successfully.")
 
-# ---------------------------------------------------------------------------
-# Show results (persisted in session state so downloads work across re-runs)
-# ---------------------------------------------------------------------------
-
-result = st.session_state.pipeline_result
-config_saved = st.session_state.pipeline_config
-
-if result is not None and config_saved is not None:
-    # ------------------------------------------------------------------
-    # Visualization
-    # ------------------------------------------------------------------
-    st.divider()
-    st.subheader("3D Visualization")
-
-    if config_saved.generate_plots:
-        from xcavate.viz.plotting import create_network_plot
-
-        # Single-material plot
-        if result.get("print_passes_sm") is not None and result.get("points") is not None:
-            st.markdown("**Single Material Print Passes**")
-            fig_sm = create_network_plot(
-                result["print_passes_sm"],
-                result["points"],
-                title="Single Material",
-            )
-            st.plotly_chart(fig_sm, use_container_width=True)
-
-        # Multimaterial plot
-        if result.get("print_passes_mm") is not None and result.get("points") is not None:
-            from xcavate.core.multimaterial import generate_multimaterial_colors
-
-            st.markdown("**Multimaterial Print Passes**")
-            colors = generate_multimaterial_colors(
-                result["print_passes_mm"], result["material_map"],
-            )
-            fig_mm = create_network_plot(
-                result["print_passes_mm"],
-                result["points"],
-                title="Multimaterial",
-                colors=colors,
-            )
-            st.plotly_chart(fig_mm, use_container_width=True)
-    else:
-        st.info("Plot generation was disabled. Enable it in the Advanced section to see visualizations.")
+            # Persist results in session state so downloads survive re-runs
+            st.session_state.pipeline_result = result
+            st.session_state.pipeline_config = config
+            st.session_state.pipeline_output_dir = str(output_dir)
+        except Exception as exc:
+            progress_bar.empty()
+            st.error(f"Pipeline failed: {exc}")
+            st.exception(exc)
+            # Clean up temp directory on failure
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            st.stop()
 
     # ------------------------------------------------------------------
-    # Downloads
+    # Show results (persisted in session state so downloads work across
+    # re-runs)
     # ------------------------------------------------------------------
-    st.divider()
-    st.subheader("Download Results")
 
-    dl_cols = st.columns(3)
+    result = st.session_state.pipeline_result
+    config_saved = st.session_state.pipeline_config
 
-    # G-code files
-    with dl_cols[0]:
-        st.markdown("**G-code**")
-        gcode_files = _find_all_gcode_files(config_saved.gcode_dir)
-        if gcode_files:
-            for gf in gcode_files:
-                data = _read_file_bytes(gf)
-                if data:
-                    st.download_button(
-                        label=gf.name,
-                        data=data,
-                        file_name=gf.name,
-                        mime="text/plain",
-                        key=f"dl_gcode_{gf.name}",
-                    )
-        else:
-            st.caption("No G-code files generated.")
-
-    # Coordinate files
-    with dl_cols[1]:
-        st.markdown("**Coordinate Files**")
-        coord_files = _find_coordinate_files(config_saved.graph_dir)
-        if coord_files:
-            for cf in coord_files:
-                data = _read_file_bytes(cf)
-                if data:
-                    st.download_button(
-                        label=cf.name,
-                        data=data,
-                        file_name=cf.name,
-                        mime="text/plain",
-                        key=f"dl_coord_{cf.name}",
-                    )
-        else:
-            st.caption("No coordinate files generated.")
-
-    # Changelog
-    with dl_cols[2]:
-        st.markdown("**Changelog**")
-        changelog_path = config_saved.output_dir / "changelog.txt"
-        changelog_data = _read_file_bytes(changelog_path)
-        if changelog_data:
-            st.download_button(
-                label="changelog.txt",
-                data=changelog_data,
-                file_name="changelog.txt",
-                mime="text/plain",
-                key="dl_changelog",
-            )
-        else:
-            st.caption("No changelog generated.")
-
-    # ------------------------------------------------------------------
-    # Print Instructions
-    # ------------------------------------------------------------------
-    instructions = result.get("instructions")
-    if instructions is not None:
+    if result is not None and config_saved is not None:
+        # --------------------------------------------------------------
+        # Visualization
+        # --------------------------------------------------------------
         st.divider()
-        st.subheader("Print Instructions")
+        st.subheader("3D Visualization")
 
-        # Start position metrics
-        pos = instructions["start_position"]
-        pos_cols = st.columns(3)
-        pos_cols[0].metric("Start X (mm)", pos["x"])
-        pos_cols[1].metric("Start Y (mm)", pos["y"])
-        pos_cols[2].metric("Start Z (mm)", pos["z"])
+        if config_saved.generate_plots:
+            from xcavate.viz.plotting import create_network_plot
 
-        # Padding info
-        pad = instructions["padding"]
-        pad_cols = st.columns(4)
-        pad_cols[0].metric("Left padding", f"{pad['left']} mm")
-        pad_cols[1].metric("Right padding", f"{pad['right']} mm")
-        pad_cols[2].metric("Front padding", f"{pad['front']} mm")
-        pad_cols[3].metric("Back padding", f"{pad['back']} mm")
+            # Single-material plot
+            if result.get("print_passes_sm") is not None and result.get("points") is not None:
+                st.markdown("**Single Material Print Passes**")
+                fig_sm = create_network_plot(
+                    result["print_passes_sm"],
+                    result["points"],
+                    title="Single Material",
+                )
+                st.plotly_chart(fig_sm, use_container_width=True)
 
-        with st.expander("Single Material Instructions", expanded=True):
-            for line in instructions["sm_instructions"]:
-                st.markdown(line)
+            # Multimaterial plot
+            if result.get("print_passes_mm") is not None and result.get("points") is not None:
+                from xcavate.core.multimaterial import generate_multimaterial_colors
 
-        with st.expander("Multimaterial Calibration"):
-            for line in instructions["mm_calibration"]:
-                st.markdown(line)
+                st.markdown("**Multimaterial Print Passes**")
+                colors = generate_multimaterial_colors(
+                    result["print_passes_mm"], result["material_map"],
+                )
+                fig_mm = create_network_plot(
+                    result["print_passes_mm"],
+                    result["points"],
+                    title="Multimaterial",
+                    colors=colors,
+                )
+                st.plotly_chart(fig_mm, use_container_width=True)
+        else:
+            st.info("Plot generation was disabled. Enable it in the Advanced section to see visualizations.")
 
-        with st.expander("Multimaterial Positioning"):
-            for line in instructions["mm_instructions"]:
-                st.markdown(line)
+        # --------------------------------------------------------------
+        # Downloads
+        # --------------------------------------------------------------
+        st.divider()
+        st.subheader("Download Results")
+
+        dl_cols = st.columns(3)
+
+        # G-code files
+        with dl_cols[0]:
+            st.markdown("**G-code**")
+            gcode_files = _find_all_gcode_files(config_saved.gcode_dir)
+            if gcode_files:
+                for gf in gcode_files:
+                    data = _read_file_bytes(gf)
+                    if data:
+                        st.download_button(
+                            label=gf.name,
+                            data=data,
+                            file_name=gf.name,
+                            mime="text/plain",
+                            key=f"dl_gcode_{gf.name}",
+                        )
+            else:
+                st.caption("No G-code files generated.")
+
+        # Coordinate files
+        with dl_cols[1]:
+            st.markdown("**Coordinate Files**")
+            coord_files = _find_coordinate_files(config_saved.graph_dir)
+            if coord_files:
+                for cf in coord_files:
+                    data = _read_file_bytes(cf)
+                    if data:
+                        st.download_button(
+                            label=cf.name,
+                            data=data,
+                            file_name=cf.name,
+                            mime="text/plain",
+                            key=f"dl_coord_{cf.name}",
+                        )
+            else:
+                st.caption("No coordinate files generated.")
+
+        # Changelog
+        with dl_cols[2]:
+            st.markdown("**Changelog**")
+            changelog_path = config_saved.output_dir / "changelog.txt"
+            changelog_data = _read_file_bytes(changelog_path)
+            if changelog_data:
+                st.download_button(
+                    label="changelog.txt",
+                    data=changelog_data,
+                    file_name="changelog.txt",
+                    mime="text/plain",
+                    key="dl_changelog",
+                )
+            else:
+                st.caption("No changelog generated.")
+
+        # --------------------------------------------------------------
+        # Print Instructions
+        # --------------------------------------------------------------
+        instructions = result.get("instructions")
+        if instructions is not None:
+            st.divider()
+            st.subheader("Print Instructions")
+
+            # Start position metrics
+            pos = instructions["start_position"]
+            pos_cols = st.columns(3)
+            pos_cols[0].metric("Start X (mm)", pos["x"])
+            pos_cols[1].metric("Start Y (mm)", pos["y"])
+            pos_cols[2].metric("Start Z (mm)", pos["z"])
+
+            # Padding info
+            pad = instructions["padding"]
+            pad_cols = st.columns(4)
+            pad_cols[0].metric("Left padding", f"{pad['left']} mm")
+            pad_cols[1].metric("Right padding", f"{pad['right']} mm")
+            pad_cols[2].metric("Front padding", f"{pad['front']} mm")
+            pad_cols[3].metric("Back padding", f"{pad['back']} mm")
+
+            with st.expander("Single Material Instructions", expanded=True):
+                for line in instructions["sm_instructions"]:
+                    st.markdown(line)
+
+            if config_saved.multimaterial:
+                with st.expander("Multimaterial Calibration"):
+                    for line in instructions["mm_calibration"]:
+                        st.markdown(line)
+
+                with st.expander("Multimaterial Positioning"):
+                    for line in instructions["mm_instructions"]:
+                        st.markdown(line)
 
 # ---------------------------------------------------------------------------
-# Calibration Validation (independent of pipeline run -- always visible)
+# Calibration Validation tab
 # ---------------------------------------------------------------------------
 
-st.divider()
-st.subheader("Calibration Validation")
-st.caption(
-    "Compare target filament diameters against measured values from a CSV. "
-    "The CSV must have a column named **Length** with measurements in microns."
-)
+with cal_tab:
+    st.caption(
+        "Compare target filament diameters against measured values from a CSV. "
+        "The CSV must have a column named **Length** with measurements in microns."
+    )
 
-cal_csv_upload = st.file_uploader(
-    "Upload measured diameters CSV",
-    type=["csv"],
-    help="CSV file with a 'Length' column containing measured filament diameters in microns.",
-)
+    cal_csv_upload = st.file_uploader(
+        "Upload measured diameters CSV",
+        type=["csv"],
+        help="CSV file with a 'Length' column containing measured filament diameters in microns.",
+    )
 
-cal_targets_str = st.text_input(
-    "Target diameters (comma-separated, mm)",
-    value="0.4, 0.375, 0.35, 0.325, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1, 0.075",
-    help="Comma-separated list of expected filament diameters in mm, in the same order as the measurements.",
-)
+    cal_targets_str = st.text_input(
+        "Target diameters (comma-separated, mm)",
+        value="0.4, 0.375, 0.35, 0.325, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1, 0.075",
+        help="Comma-separated list of expected filament diameters in mm, in the same order as the measurements.",
+    )
 
-cal_measurements_per = st.number_input(
-    "Measurements per target",
-    value=3,
-    min_value=1,
-    step=1,
-    help="Number of rows in the CSV to average for each target diameter.",
-)
+    cal_measurements_per = st.number_input(
+        "Measurements per target",
+        value=3,
+        min_value=1,
+        step=1,
+        help="Number of rows in the CSV to average for each target diameter.",
+    )
 
-cal_run = st.button("Run Validation", disabled=(cal_csv_upload is None))
+    cal_run = st.button("Run Validation", disabled=(cal_csv_upload is None))
 
-if cal_run and cal_csv_upload is not None:
-    try:
-        target_diameters = [float(x.strip()) for x in cal_targets_str.split(",")]
-        csv_bytes = cal_csv_upload.getvalue()
+    if cal_run and cal_csv_upload is not None:
+        try:
+            target_diameters = [float(x.strip()) for x in cal_targets_str.split(",")]
+            csv_bytes = cal_csv_upload.getvalue()
 
-        from xcavate.core.calibration import validate_calibration
+            from xcavate.core.calibration import validate_calibration
 
-        cal_result = validate_calibration(
-            target_diameters=target_diameters,
-            measured_csv_bytes=csv_bytes,
-            measurements_per_target=cal_measurements_per,
-        )
+            cal_result = validate_calibration(
+                target_diameters=target_diameters,
+                measured_csv_bytes=csv_bytes,
+                measurements_per_target=cal_measurements_per,
+            )
 
-        st.session_state.cal_result = cal_result
-    except Exception as exc:
-        st.error(f"Calibration validation failed: {exc}")
-        st.exception(exc)
+            st.session_state.cal_result = cal_result
+        except Exception as exc:
+            st.error(f"Calibration validation failed: {exc}")
+            st.exception(exc)
 
-if "cal_result" in st.session_state and st.session_state.cal_result is not None:
-    cal_result = st.session_state.cal_result
+    if "cal_result" in st.session_state and st.session_state.cal_result is not None:
+        cal_result = st.session_state.cal_result
 
-    st.plotly_chart(cal_result["figure"], use_container_width=True)
+        st.plotly_chart(cal_result["figure"], use_container_width=True)
 
-    cal_dl_cols = st.columns(2)
-    with cal_dl_cols[0]:
-        st.download_button(
-            label="Download CSV report",
-            data=cal_result["csv_bytes"],
-            file_name="calibration_error.csv",
-            mime="text/csv",
-            key="dl_cal_csv",
-        )
-    with cal_dl_cols[1]:
-        st.download_button(
-            label="Download HTML report",
-            data=cal_result["html_bytes"],
-            file_name="calibration_error.html",
-            mime="text/html",
-            key="dl_cal_html",
-        )
+        cal_dl_cols = st.columns(2)
+        with cal_dl_cols[0]:
+            st.download_button(
+                label="Download CSV report",
+                data=cal_result["csv_bytes"],
+                file_name="calibration_error.csv",
+                mime="text/csv",
+                key="dl_cal_csv",
+            )
+        with cal_dl_cols[1]:
+            st.download_button(
+                label="Download HTML report",
+                data=cal_result["html_bytes"],
+                file_name="calibration_error.html",
+                mime="text/html",
+                key="dl_cal_html",
+            )
