@@ -580,170 +580,178 @@ for _key in _CUSTOM_GCODE_FIELDS:
     if _key not in st.session_state:
         st.session_state[_key] = ""
 
-if custom_gcode:
-    st.subheader("Custom G-code Templates")
-    st.caption(
-        "Paste your printer-specific G-code snippets below. These replace "
-        "the default commands for header, extrusion start/stop, pressure "
-        "control, and dwell sections in the final output file."
-    )
-
-    cg_tabs = st.tabs(["Header", "Single Material", "Multimaterial", "Dwell"])
-
-    # --- Tab 1: Header ---
-    with cg_tabs[0]:
-        st.markdown(
-            "Custom G-code for the **header** section of the output file. "
-            "Include any code required for your printer, such as establishing "
-            "connections between external pressure boxes and syringes."
-        )
-        st.session_state["cg_header"] = st.text_area(
-            "Header code",
-            value=st.session_state["cg_header"],
-            height=200,
-            placeholder="; e.g. G28 ; Home all axes\n; M106 S255 ; Fan on",
-            key="ta_cg_header",
-        )
-
-    # --- Tab 2: Single Material ---
-    with cg_tabs[1]:
-        st.markdown(
-            "Custom G-code for **starting** and **stopping** extrusion in "
-            "single-material mode."
-        )
-        sm_cols = st.columns(2)
-        with sm_cols[0]:
-            st.session_state["cg_start_extrusion"] = st.text_area(
-                "Start extrusion",
-                value=st.session_state["cg_start_extrusion"],
-                height=180,
-                placeholder="; G-code to begin extrusion",
-                key="ta_cg_start_extrusion",
-            )
-        with sm_cols[1]:
-            st.session_state["cg_stop_extrusion"] = st.text_area(
-                "Stop extrusion",
-                value=st.session_state["cg_stop_extrusion"],
-                height=180,
-                placeholder="; G-code to stop extrusion",
-                key="ta_cg_stop_extrusion",
-            )
-
-    # --- Tab 3: Multimaterial ---
-    with cg_tabs[2]:
-        st.markdown(
-            "Custom G-code for multimaterial printing. Provide start/stop "
-            "extrusion and active/resting pressure codes for **each printhead**."
-        )
-
-        st.markdown("##### Extrusion Start / Stop")
-        mm_cols_a = st.columns(2)
-        with mm_cols_a[0]:
-            st.session_state["cg_start_extrusion_ph1"] = st.text_area(
-                "Start extrusion \u2014 Printhead 1",
-                value=st.session_state["cg_start_extrusion_ph1"],
-                height=150,
-                placeholder="; Start extrusion PH1",
-                key="ta_cg_start_extrusion_ph1",
-            )
-            st.session_state["cg_stop_extrusion_ph1"] = st.text_area(
-                "Stop extrusion \u2014 Printhead 1",
-                value=st.session_state["cg_stop_extrusion_ph1"],
-                height=150,
-                placeholder="; Stop extrusion PH1",
-                key="ta_cg_stop_extrusion_ph1",
-            )
-        with mm_cols_a[1]:
-            st.session_state["cg_start_extrusion_ph2"] = st.text_area(
-                "Start extrusion \u2014 Printhead 2",
-                value=st.session_state["cg_start_extrusion_ph2"],
-                height=150,
-                placeholder="; Start extrusion PH2",
-                key="ta_cg_start_extrusion_ph2",
-            )
-            st.session_state["cg_stop_extrusion_ph2"] = st.text_area(
-                "Stop extrusion \u2014 Printhead 2",
-                value=st.session_state["cg_stop_extrusion_ph2"],
-                height=150,
-                placeholder="; Stop extrusion PH2",
-                key="ta_cg_stop_extrusion_ph2",
-            )
-
-        st.markdown("##### Pressure Control")
-        mm_cols_b = st.columns(2)
-        with mm_cols_b[0]:
-            st.session_state["cg_active_pressure_ph1"] = st.text_area(
-                "Active pressure \u2014 Printhead 1",
-                value=st.session_state["cg_active_pressure_ph1"],
-                height=150,
-                placeholder="; Active pressure for PH1",
-                key="ta_cg_active_pressure_ph1",
-                help="G-code for the ink extrusion pressure of Printhead 1 "
-                     "when it is the **active** printhead.",
-            )
-            st.session_state["cg_rest_pressure_ph1"] = st.text_area(
-                "Resting pressure \u2014 Printhead 1",
-                value=st.session_state["cg_rest_pressure_ph1"],
-                height=150,
-                placeholder="; Resting pressure for PH1",
-                key="ta_cg_rest_pressure_ph1",
-                help="G-code for the ink extrusion pressure of Printhead 1 "
-                     "when it is the **inactive** printhead.",
-            )
-        with mm_cols_b[1]:
-            st.session_state["cg_active_pressure_ph2"] = st.text_area(
-                "Active pressure \u2014 Printhead 2",
-                value=st.session_state["cg_active_pressure_ph2"],
-                height=150,
-                placeholder="; Active pressure for PH2",
-                key="ta_cg_active_pressure_ph2",
-                help="G-code for the ink extrusion pressure of Printhead 2 "
-                     "when it is the **active** printhead.",
-            )
-            st.session_state["cg_rest_pressure_ph2"] = st.text_area(
-                "Resting pressure \u2014 Printhead 2",
-                value=st.session_state["cg_rest_pressure_ph2"],
-                height=150,
-                placeholder="; Resting pressure for PH2",
-                key="ta_cg_rest_pressure_ph2",
-                help="G-code for the ink extrusion pressure of Printhead 2 "
-                     "when it is the **inactive** printhead.",
-            )
-
-    # --- Tab 4: Dwell ---
-    with cg_tabs[3]:
-        st.markdown(
-            "**Optional.** Incorporating time delays (\"dwells\") at the first "
-            "and last node of each print pass deposits additional ink at each "
-            "junction, improving the connection via a process similar to \"spot "
-            "welding.\""
-        )
-        dwell_cols = st.columns(2)
-        with dwell_cols[0]:
-            st.session_state["cg_dwell_start"] = st.text_area(
-                "Dwell code (start of pass)",
-                value=st.session_state["cg_dwell_start"],
-                height=200,
-                placeholder="; e.g. G4 P80 ; dwell 80 ms",
-                key="ta_cg_dwell_start",
-            )
-        with dwell_cols[1]:
-            st.session_state["cg_dwell_end"] = st.text_area(
-                "Dwell code (end of pass)",
-                value=st.session_state["cg_dwell_end"],
-                height=200,
-                placeholder="; e.g. G4 P80 ; dwell 80 ms",
-                key="ta_cg_dwell_end",
-            )
-
-    st.divider()
-
-
 # ---------------------------------------------------------------------------
 # Main area -- top-level tabs
 # ---------------------------------------------------------------------------
 
-main_tab, instr_tab, cal_tab = st.tabs(["Pipeline", "Print Instructions", "Calibration Validation"])
+tab_names = ["Pipeline"]
+if custom_gcode:
+    tab_names.append("Custom G-code")
+tab_names += ["Print Instructions", "Calibration Validation"]
+
+tabs = st.tabs(tab_names)
+idx = 0
+main_tab = tabs[idx]; idx += 1
+cg_tab = tabs[idx] if custom_gcode else None; idx += (1 if custom_gcode else 0)
+instr_tab = tabs[idx]; idx += 1
+cal_tab = tabs[idx]
+
+if cg_tab is not None:
+    with cg_tab:
+        st.subheader("Custom G-code Templates")
+        st.caption(
+            "Paste your printer-specific G-code snippets below. These replace "
+            "the default commands for header, extrusion start/stop, pressure "
+            "control, and dwell sections in the final output file."
+        )
+
+        cg_tabs = st.tabs(["Header", "Single Material", "Multimaterial", "Dwell"])
+
+        # --- Tab 1: Header ---
+        with cg_tabs[0]:
+            st.markdown(
+                "Custom G-code for the **header** section of the output file. "
+                "Include any code required for your printer, such as establishing "
+                "connections between external pressure boxes and syringes."
+            )
+            st.session_state["cg_header"] = st.text_area(
+                "Header code",
+                value=st.session_state["cg_header"],
+                height=200,
+                placeholder="; e.g. G28 ; Home all axes\n; M106 S255 ; Fan on",
+                key="ta_cg_header",
+            )
+
+        # --- Tab 2: Single Material ---
+        with cg_tabs[1]:
+            st.markdown(
+                "Custom G-code for **starting** and **stopping** extrusion in "
+                "single-material mode."
+            )
+            sm_cols = st.columns(2)
+            with sm_cols[0]:
+                st.session_state["cg_start_extrusion"] = st.text_area(
+                    "Start extrusion",
+                    value=st.session_state["cg_start_extrusion"],
+                    height=180,
+                    placeholder="; G-code to begin extrusion",
+                    key="ta_cg_start_extrusion",
+                )
+            with sm_cols[1]:
+                st.session_state["cg_stop_extrusion"] = st.text_area(
+                    "Stop extrusion",
+                    value=st.session_state["cg_stop_extrusion"],
+                    height=180,
+                    placeholder="; G-code to stop extrusion",
+                    key="ta_cg_stop_extrusion",
+                )
+
+        # --- Tab 3: Multimaterial ---
+        with cg_tabs[2]:
+            st.markdown(
+                "Custom G-code for multimaterial printing. Provide start/stop "
+                "extrusion and active/resting pressure codes for **each printhead**."
+            )
+
+            st.markdown("##### Extrusion Start / Stop")
+            mm_cols_a = st.columns(2)
+            with mm_cols_a[0]:
+                st.session_state["cg_start_extrusion_ph1"] = st.text_area(
+                    "Start extrusion \u2014 Printhead 1",
+                    value=st.session_state["cg_start_extrusion_ph1"],
+                    height=150,
+                    placeholder="; Start extrusion PH1",
+                    key="ta_cg_start_extrusion_ph1",
+                )
+                st.session_state["cg_stop_extrusion_ph1"] = st.text_area(
+                    "Stop extrusion \u2014 Printhead 1",
+                    value=st.session_state["cg_stop_extrusion_ph1"],
+                    height=150,
+                    placeholder="; Stop extrusion PH1",
+                    key="ta_cg_stop_extrusion_ph1",
+                )
+            with mm_cols_a[1]:
+                st.session_state["cg_start_extrusion_ph2"] = st.text_area(
+                    "Start extrusion \u2014 Printhead 2",
+                    value=st.session_state["cg_start_extrusion_ph2"],
+                    height=150,
+                    placeholder="; Start extrusion PH2",
+                    key="ta_cg_start_extrusion_ph2",
+                )
+                st.session_state["cg_stop_extrusion_ph2"] = st.text_area(
+                    "Stop extrusion \u2014 Printhead 2",
+                    value=st.session_state["cg_stop_extrusion_ph2"],
+                    height=150,
+                    placeholder="; Stop extrusion PH2",
+                    key="ta_cg_stop_extrusion_ph2",
+                )
+
+            st.markdown("##### Pressure Control")
+            mm_cols_b = st.columns(2)
+            with mm_cols_b[0]:
+                st.session_state["cg_active_pressure_ph1"] = st.text_area(
+                    "Active pressure \u2014 Printhead 1",
+                    value=st.session_state["cg_active_pressure_ph1"],
+                    height=150,
+                    placeholder="; Active pressure for PH1",
+                    key="ta_cg_active_pressure_ph1",
+                    help="G-code for the ink extrusion pressure of Printhead 1 "
+                         "when it is the **active** printhead.",
+                )
+                st.session_state["cg_rest_pressure_ph1"] = st.text_area(
+                    "Resting pressure \u2014 Printhead 1",
+                    value=st.session_state["cg_rest_pressure_ph1"],
+                    height=150,
+                    placeholder="; Resting pressure for PH1",
+                    key="ta_cg_rest_pressure_ph1",
+                    help="G-code for the ink extrusion pressure of Printhead 1 "
+                         "when it is the **inactive** printhead.",
+                )
+            with mm_cols_b[1]:
+                st.session_state["cg_active_pressure_ph2"] = st.text_area(
+                    "Active pressure \u2014 Printhead 2",
+                    value=st.session_state["cg_active_pressure_ph2"],
+                    height=150,
+                    placeholder="; Active pressure for PH2",
+                    key="ta_cg_active_pressure_ph2",
+                    help="G-code for the ink extrusion pressure of Printhead 2 "
+                         "when it is the **active** printhead.",
+                )
+                st.session_state["cg_rest_pressure_ph2"] = st.text_area(
+                    "Resting pressure \u2014 Printhead 2",
+                    value=st.session_state["cg_rest_pressure_ph2"],
+                    height=150,
+                    placeholder="; Resting pressure for PH2",
+                    key="ta_cg_rest_pressure_ph2",
+                    help="G-code for the ink extrusion pressure of Printhead 2 "
+                         "when it is the **inactive** printhead.",
+                )
+
+        # --- Tab 4: Dwell ---
+        with cg_tabs[3]:
+            st.markdown(
+                "**Optional.** Incorporating time delays (\"dwells\") at the first "
+                "and last node of each print pass deposits additional ink at each "
+                "junction, improving the connection via a process similar to \"spot "
+                "welding.\""
+            )
+            dwell_cols = st.columns(2)
+            with dwell_cols[0]:
+                st.session_state["cg_dwell_start"] = st.text_area(
+                    "Dwell code (start of pass)",
+                    value=st.session_state["cg_dwell_start"],
+                    height=200,
+                    placeholder="; e.g. G4 P80 ; dwell 80 ms",
+                    key="ta_cg_dwell_start",
+                )
+            with dwell_cols[1]:
+                st.session_state["cg_dwell_end"] = st.text_area(
+                    "Dwell code (end of pass)",
+                    value=st.session_state["cg_dwell_end"],
+                    height=200,
+                    placeholder="; e.g. G4 P80 ; dwell 80 ms",
+                    key="ta_cg_dwell_end",
+                )
 
 with main_tab:
 
