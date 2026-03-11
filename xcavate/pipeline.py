@@ -400,16 +400,25 @@ def _subdivide_by_material(
     if not break_points:
         return
 
-    # Split passes at break points
+    # Split passes at break points (with 1-node overlap to prevent ink gaps)
     new_matrix = {}
     for i in break_points:
         new_passes = {}
         start = 0
         for counter, bp in enumerate(break_points[i]):
             bp_idx = print_passes[i].index(bp)
-            new_passes[counter] = print_passes[i][start:bp_idx]
+            if counter == 0:
+                # First sub-pass: no overlap at start
+                new_passes[counter] = print_passes[i][start:bp_idx]
+            else:
+                # Non-first sub-pass: overlap 1 node with previous
+                new_passes[counter] = print_passes[i][start - 1:bp_idx]
             start = bp_idx
-        new_passes[len(break_points[i])] = print_passes[i][start:]
+        # Final sub-pass: overlap 1 node with previous (unless it's the first)
+        if len(break_points[i]) > 0:
+            new_passes[len(break_points[i])] = print_passes[i][start - 1:]
+        else:
+            new_passes[len(break_points[i])] = print_passes[i][start:]
         new_matrix[i] = new_passes
 
     # Reassemble with new indices

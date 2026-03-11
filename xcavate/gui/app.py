@@ -277,6 +277,14 @@ with st.sidebar:
             "Axis 2 name", value="B",
             help="Z-axis letter for the venous printhead (e.g. 'B'). Must match the motion controller configuration.",
         )
+        jog_translation = st.number_input(
+            "Jog translation speed (mm/s)",
+            min_value=0.001,
+            value=10.0,
+            step=1.0,
+            format="%.1f",
+            help="Speed for rapid travel moves between nozzles during multimaterial printhead switching.",
+        )
         resting_pressure = st.number_input(
             "Resting pressure (psi)", min_value=0.0, value=0.0, step=0.5, format="%.1f",
             help="Pneumatic pressure (psi) applied to the inactive printhead during multimaterial printing.",
@@ -397,6 +405,14 @@ with st.sidebar:
             "Speed calculation", value=False,
             help="Compute per-node print speed from vessel radius and flow rate instead of using a fixed print speed.",
         )
+        close_sm = st.toggle(
+            "Gap closure (single-material)", value=False,
+            help="Load gap closure extension files for single-material prints from the inputs/extension directory.",
+        )
+        close_mm = st.toggle(
+            "Gap closure (multimaterial)", value=False,
+            help="Load gap closure extension files for multimaterial prints from the inputs/extension directory.",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -440,6 +456,7 @@ def _build_config(
         printhead_2=printhead_2,
         axis_1=axis_1,
         axis_2=axis_2,
+        jog_translation=jog_translation,
         resting_pressure=resting_pressure,
         active_pressure=active_pressure,
         positive_ink_start=positive_ink_start,
@@ -458,6 +475,8 @@ def _build_config(
         overlap_algorithm=overlap_algorithm,
         generate_plots=generate_plots,
         speed_calc=speed_calc,
+        close_sm=close_sm,
+        close_mm=close_mm,
         output_dir=output_dir,
     )
 
