@@ -96,18 +96,24 @@ def validate_calibration(
 def compute_flow_rate(
     target_diameters: list[float],
     measured_csv_bytes: bytes,
-    print_speed: float,
+    print_speeds: list[float],
     measurements_per_target: int = 3,
     output_dir: Path | None = None,
 ) -> dict:
     """Compute volumetric flow rate (Q) from calibration measurements.
+
+    During calibration the pressure is held constant and the print speed is
+    varied for each target diameter group.  Each group therefore has its own
+    print speed, and Q = v_i * pi * r_i^2 should be roughly constant across
+    groups (since Q is set by the constant pressure).
 
     Args:
         target_diameters: Expected diameters in mm (used only to determine the
             number of groups).
         measured_csv_bytes: Raw bytes of a CSV with a ``"Length"`` column
             containing measured diameters in **microns**.
-        print_speed: Print speed in mm/s used during calibration.
+        print_speeds: Print speeds in mm/s used during calibration, one per
+            target diameter group (same order as *target_diameters*).
         measurements_per_target: Number of measurement rows to average per
             target diameter.
         output_dir: If provided, ``Q_pressure.txt`` and
@@ -128,18 +134,16 @@ def compute_flow_rate(
         diameter_array.reshape(n_targets, measurements_per_target), axis=1,
     )
 
-    # Measured radii and per-target Q
+    # Measured radii and per-target Q  (one speed per group)
     radii = diameter_averages / 2
-    q_per_target = print_speed * np.pi * radii ** 2
+    speeds_arr = np.array(print_speeds[:n_targets])
+    q_per_target = speeds_arr * np.pi * radii ** 2
     q_value = float(np.mean(q_per_target))
-
-    # Per-target speed from averaged Q
-    speed_per_target = q_value / (np.pi * radii ** 2)
 
     # Plotly figure: speed vs radius
     fig = go.Figure(
         data=go.Scatter(
-            x=np.round(speed_per_target, 4).tolist(),
+            x=np.round(speeds_arr, 4).tolist(),
             y=np.round(radii, 4).tolist(),
             mode="lines+markers",
             name="Calibration Curve",

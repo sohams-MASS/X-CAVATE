@@ -1029,13 +1029,12 @@ with cal_tab:
         key="q_csv_upload",
     )
 
-    q_print_speed = st.number_input(
-        "Print speed used during calibration (mm/s)",
-        value=1.0,
-        min_value=0.001,
-        step=0.1,
-        format="%.3f",
-        help="The print speed in mm/s at which the calibration filaments were printed.",
+    q_print_speeds_str = st.text_input(
+        "Print speeds used during calibration (comma-separated, mm/s)",
+        value="1.0",
+        help="Comma-separated list of print speeds in mm/s, one per target diameter group (same order). "
+             "Pressure is held constant; speed is varied for each calibration filament.",
+        key="q_print_speeds_str",
     )
 
     q_targets_str = st.text_input(
@@ -1059,6 +1058,7 @@ with cal_tab:
     if q_run and q_csv_upload is not None:
         try:
             q_target_diameters = [float(x.strip()) for x in q_targets_str.split(",")]
+            q_print_speeds = [float(x.strip()) for x in q_print_speeds_str.split(",")]
             q_csv_bytes = q_csv_upload.getvalue()
 
             from xcavate.core.calibration import compute_flow_rate
@@ -1066,7 +1066,7 @@ with cal_tab:
             q_result = compute_flow_rate(
                 target_diameters=q_target_diameters,
                 measured_csv_bytes=q_csv_bytes,
-                print_speed=q_print_speed,
+                print_speeds=q_print_speeds,
                 measurements_per_target=q_measurements_per,
             )
 

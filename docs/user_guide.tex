@@ -718,6 +718,8 @@ diameters against target values.
 
 This section calculates the average volumetric flow rate from calibration
 filament measurements and produces a calibration curve (radius vs.\ speed).
+During calibration, pressure is held constant while the print speed is varied
+for each target diameter group.
 
 \subsubsection{Inputs}
 
@@ -726,7 +728,7 @@ filament measurements and produces a calibration curve (radius vs.\ speed).
 \textbf{Widget} & \textbf{Type} & \textbf{Description} \\
 \midrule
 \gui{Upload measured diameters CSV} & file upload & CSV file with a \code{Length} column containing measured filament diameters in \textbf{microns}. \\
-\gui{Print speed used during calibration} & float (default: 1.0) & The print speed in mm/s at which the calibration filaments were printed. \\
+\gui{Print speeds used during calibration} & text input & Comma-separated list of print speeds in mm/s, one per target diameter group (same order). Pressure is held constant; speed is varied for each calibration filament. \\
 \gui{Target diameters} & text input & Comma-separated list of expected filament diameters in \textbf{mm}, in the same order as the measurements. \\
 \gui{Measurements per target} & int (default: 3) & Number of rows in the CSV to average for each target diameter. \\
 \bottomrule
