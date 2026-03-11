@@ -743,7 +743,7 @@ if custom_gcode:
 # Main area -- top-level tabs
 # ---------------------------------------------------------------------------
 
-main_tab, cal_tab = st.tabs(["Pipeline", "Calibration Validation"])
+main_tab, instr_tab, cal_tab = st.tabs(["Pipeline", "Print Instructions", "Calibration Validation"])
 
 with main_tab:
 
@@ -940,14 +940,17 @@ with main_tab:
             else:
                 st.caption("No changelog generated.")
 
-        # --------------------------------------------------------------
-        # Print Instructions
-        # --------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Print Instructions tab
+# ---------------------------------------------------------------------------
+
+with instr_tab:
+    result = st.session_state.pipeline_result
+    config_saved = st.session_state.pipeline_config
+
+    if result is not None and config_saved is not None:
         instructions = result.get("instructions")
         if instructions is not None:
-            st.divider()
-            st.subheader("Print Instructions")
-
             # Start position metrics
             pos = instructions["start_position"]
             pos_cols = st.columns(3)
@@ -975,6 +978,8 @@ with main_tab:
                 with st.expander("Multimaterial Positioning"):
                     for line in instructions["mm_instructions"]:
                         st.markdown(line)
+    else:
+        st.info("Run the pipeline first to see print instructions.")
 
 # ---------------------------------------------------------------------------
 # Calibration Validation tab
