@@ -53,6 +53,7 @@ def run_xcavate(
             - ``speed_map_sm``: Speed map for SM (or None).
             - ``speed_map_mm``: Speed map for MM (or None).
             - ``material_map``: Material classification (or None).
+            - ``warnings``: List of warning strings (may be empty).
     """
     from xcavate.io.reader import (
         read_network_file,
@@ -208,8 +209,19 @@ def run_xcavate(
     print_passes_mm = None
     speed_map_mm = None
     material_map = None
+    warnings: List[str] = []
 
-    if config.multimaterial and num_columns >= 5:
+    if config.multimaterial and num_columns < 5:
+        msg = (
+            "Multimaterial was enabled but your input file only has "
+            f"{num_columns} columns (need 5: x, y, z, radius, artven). "
+            "Skipping multimaterial processing."
+        )
+        logger.warning(msg)
+        print(f"\nWARNING: {msg}")
+        warnings.append(msg)
+        _progress(6, "Skipping multimaterial (input missing artven column)")
+    elif config.multimaterial and num_columns >= 5:
         _progress(6, "Processing multimaterial passes")
 
         print_passes_mm = copy.deepcopy(passes_closed)
@@ -325,6 +337,7 @@ def run_xcavate(
         "speed_map_mm": speed_map_mm,
         "material_map": material_map,
         "instructions": instructions,
+        "warnings": warnings,
     }
 
 

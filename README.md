@@ -484,6 +484,7 @@ print(f"Generated {len(result['print_passes_sm'])} single-material passes")
 #   "speed_map_mm"             - Speed map for MM (dict or None)
 #   "material_map"             - Material classification (dict or None)
 #   "instructions"             - Printing instructions (dict)
+#   "warnings"                 - List of warning strings (may be empty)
 ```
 
 **With custom G-code templates:**
@@ -525,7 +526,7 @@ The pipeline loads all `.txt` template files from `custom_gcode_dir`. Any missin
 | `num_decimals` | `--num_decimals` | Decimal places for output rounding |
 | `amount_up` | `--amount_up` | Z-raise above container between passes (mm). Default: 10 |
 | `printer_type` | `--printer_type` | 0 = Pressure, 1 = Positive Ink, 2 = Aerotech |
-| `multimaterial` | `--multimaterial` | 0 = off, 1 = on |
+| `multimaterial` | `--multimaterial` | 0 = off, 1 = on. **Requires a 5-column input file** (x, y, z, radius, artven). If enabled without the artven column, the pipeline skips multimaterial processing and emits a warning. |
 | `tolerance_flag` | `--tolerance_flag` | 0 = off, 1 = on |
 | `speed_calc` | `--speed_calc` | Compute varying print speeds? 0 = off, 1 = on |
 | `plots` | `--plots` | Generate 3D plots? 0 = off, 1 = on |

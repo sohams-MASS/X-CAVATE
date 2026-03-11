@@ -185,7 +185,10 @@ def main(argv: list[str] | None = None) -> None:
     config = args_to_config(args)
 
     from xcavate.pipeline import run_xcavate
-    run_xcavate(config)
+
+    result = run_xcavate(config)
+    for w in result.get("warnings", []):
+        print(f"WARNING: {w}", file=sys.stderr)
 
 
 if __name__ == "__main__":
