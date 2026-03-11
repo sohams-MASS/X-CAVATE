@@ -409,10 +409,34 @@ with st.sidebar:
             "Gap closure (single-material)", value=False,
             help="Load gap closure extension files for single-material prints from the inputs/extension directory.",
         )
+        if close_sm:
+            close_sm_pass_upload = st.file_uploader(
+                "Pass indices (SM)", type=["txt"], key="close_sm_pass",
+                help="Text file listing pass indices to extend (one per line). View X-CAVATE manual for more information.",
+            )
+            close_sm_delta_upload = st.file_uploader(
+                "Deltas (SM)", type=["txt"], key="close_sm_delta",
+                help="Text file with extension deltas (x y z per line). View X-CAVATE manual for more information.",
+            )
+        else:
+            close_sm_pass_upload = None
+            close_sm_delta_upload = None
         close_mm = st.toggle(
             "Gap closure (multimaterial)", value=False,
             help="Load gap closure extension files for multimaterial prints from the inputs/extension directory.",
         )
+        if close_mm:
+            close_mm_pass_upload = st.file_uploader(
+                "Pass indices (MM)", type=["txt"], key="close_mm_pass",
+                help="Text file listing pass indices to extend (one per line). View X-CAVATE manual for more information.",
+            )
+            close_mm_delta_upload = st.file_uploader(
+                "Deltas (MM)", type=["txt"], key="close_mm_delta",
+                help="Text file with extension deltas (x y z per line). View X-CAVATE manual for more information.",
+            )
+        else:
+            close_mm_pass_upload = None
+            close_mm_delta_upload = None
 
 
 # ---------------------------------------------------------------------------
@@ -753,11 +777,27 @@ if run_button:
             if content.strip():
                 (custom_dir / _meta["file"]).write_text(content)
 
+    # Save gap closure extension files (if enabled)
+    extension_dir = input_dir / "extension"
+    if close_sm or close_mm:
+        extension_dir.mkdir(exist_ok=True)
+    if close_sm:
+        if close_sm_pass_upload is not None:
+            (extension_dir / "pass_to_extend_SM.txt").write_bytes(close_sm_pass_upload.getvalue())
+        if close_sm_delta_upload is not None:
+            (extension_dir / "deltas_to_extend_SM.txt").write_bytes(close_sm_delta_upload.getvalue())
+    if close_mm:
+        if close_mm_pass_upload is not None:
+            (extension_dir / "pass_to_extend_MM.txt").write_bytes(close_mm_pass_upload.getvalue())
+        if close_mm_delta_upload is not None:
+            (extension_dir / "deltas_to_extend_MM.txt").write_bytes(close_mm_delta_upload.getvalue())
+
     # Build config
     try:
         config = _build_config(network_path, inletoutlet_path, output_dir)
         # Point custom_gcode_dir to the temp directory where we wrote the files
         config.custom_gcode_dir = custom_dir
+        config.extension_dir = extension_dir
     except Exception as exc:
         st.error(f"Invalid configuration: {exc}")
         st.stop()
