@@ -1,5 +1,7 @@
 """Streamlit GUI for X-CAVATE.
 
+Original Code Author: Jessica Herrmann
+
 Provides a web interface for users who are not familiar with coding to
 convert vascular network geometry into 3D printer G-code.
 
