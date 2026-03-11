@@ -235,7 +235,11 @@ streamlit run xcavate/gui/app.py
 This opens a browser at **http://localhost:8501** with:
 
 - **Sidebar** — File upload widgets and all configurable parameters in expandable sections
-- **Main area** — Run button, progress bar (7 steps), interactive 3D plot, download buttons
+- **Main area** — Top-level tabs:
+  - **Pipeline** — Run button, progress bar (7 steps), 3D visualizations (original network, SM, and MM plots), download buttons
+  - **Custom G-code** *(appears only when the toggle is on)* — Tabbed template editor for header, extrusion, pressure, and dwell snippets
+  - **Print Instructions** — Step-by-step printing instructions for SM and MM modes
+  - **Calibration Validation** — Upload calibration data to validate print accuracy
 
 **Steps:**
 
@@ -243,15 +247,16 @@ This opens a browser at **http://localhost:8501** with:
 2. Set **Required Parameters**: nozzle diameter, container height, decimal places, amount up
 3. Choose a **Printer type** (Pressure, Positive Ink, or Aerotech)
 4. (Optional) Expand optional sections to fine-tune: tolerancing, print speeds, geometry, downsampling, multimaterial, positive ink displacement, advanced
-5. (Optional) Enable **Custom G-code** in the Advanced section to reveal the template editor (see below)
-6. Click **Run X-CAVATE**
+5. (Optional) Enable **Custom G-code** in the Advanced section to reveal the Custom G-code tab (see below)
+6. Click **Run X-CAVATE** in the Pipeline tab
 7. Watch the progress bar as the pipeline runs through all 7 steps
-8. View the interactive 3D plot of your print passes
+8. View the interactive 3D plots: original network, single-material passes, and multimaterial passes (if enabled)
 9. Download G-code, coordinate files, and changelog
+10. Check the **Print Instructions** tab for step-by-step printing guidance
 
 **Custom G-code in the GUI:**
 
-When you enable the "Custom G-code" toggle in the sidebar's Advanced section, a tabbed editor appears in the main area with four tabs:
+When you enable the "Custom G-code" toggle in the sidebar's Advanced section, a **Custom G-code** tab appears between the Pipeline and Print Instructions tabs. It contains four sub-tabs:
 
 | Tab | What to paste |
 |-----|---------------|
@@ -260,7 +265,7 @@ When you enable the "Custom G-code" toggle in the sidebar's Advanced section, a 
 | **Multimaterial** | Start/stop extrusion + active/resting pressure for each printhead (8 fields in a 2-column layout) |
 | **Dwell** | Optional time-delay code for "spot welding" at pass junctions |
 
-Paste your printer-specific G-code into each text area. The snippets are saved automatically and persist across page re-runs. When you click **Run X-CAVATE**, they are injected into the appropriate sections of the final G-code output.
+Paste your printer-specific G-code into each text area. The snippets are saved automatically and persist across page re-runs (even when the toggle is turned off). When you click **Run X-CAVATE**, they are injected into the appropriate sections of the final G-code output.
 
 **Troubleshooting:**
 - If you see `Runtime instance already exists`, kill stale processes: `pkill -f streamlit` then restart
@@ -469,13 +474,16 @@ result = run_xcavate(config, progress_cb=on_progress)
 print(f"Generated {len(result['print_passes_sm'])} single-material passes")
 
 # result keys:
-#   "print_passes_sm"  - Single-material print passes (dict)
-#   "print_passes_mm"  - Multimaterial passes (dict or None)
-#   "points"           - Interpolated coordinate array (ndarray)
-#   "changelog"        - Gap closure changelog (list of strings)
-#   "speed_map_sm"     - Speed map for SM (dict or None)
-#   "speed_map_mm"     - Speed map for MM (dict or None)
-#   "material_map"     - Material classification (dict or None)
+#   "print_passes_sm"          - Single-material print passes (dict)
+#   "print_passes_mm"          - Multimaterial passes (dict or None)
+#   "points"                   - Interpolated coordinate array (ndarray)
+#   "points_original"          - Pre-interpolation coordinates (ndarray)
+#   "coord_num_dict_original"  - Vessel index -> point count (dict)
+#   "changelog"                - Gap closure changelog (list of strings)
+#   "speed_map_sm"             - Speed map for SM (dict or None)
+#   "speed_map_mm"             - Speed map for MM (dict or None)
+#   "material_map"             - Material classification (dict or None)
+#   "instructions"             - Printing instructions (dict)
 ```
 
 **With custom G-code templates:**
@@ -613,6 +621,7 @@ outputs/
 │   ├── gcode_SM_pressure.txt   # Single-material G-code
 │   └── gcode_MM_pressure.txt   # Multimaterial G-code (if enabled)
 ├── plots/
+│   ├── network_original.html   # Interactive 3D plot (original network)
 │   ├── network_SM.html         # Interactive 3D plot (single material)
 │   └── network_MM.html         # Interactive 3D plot (multimaterial)
 └── changelog.txt               # Gap closure operations log
