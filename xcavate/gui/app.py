@@ -883,6 +883,13 @@ with main_tab:
                     title="Original Network",
                 )
                 st.plotly_chart(fig_orig, use_container_width=True)
+                st.download_button(
+                    label="Download Original Network (HTML)",
+                    data=fig_orig.to_html(full_html=True, include_plotlyjs="cdn").encode("utf-8"),
+                    file_name="original_network.html",
+                    mime="text/html",
+                    key="dl_plot_orig",
+                )
 
             # Single-material plot
             if result.get("print_passes_sm") is not None and result.get("points") is not None:
@@ -893,6 +900,13 @@ with main_tab:
                     title="Single Material",
                 )
                 st.plotly_chart(fig_sm, use_container_width=True)
+                st.download_button(
+                    label="Download SM Print Passes (HTML)",
+                    data=fig_sm.to_html(full_html=True, include_plotlyjs="cdn").encode("utf-8"),
+                    file_name="print_passes_SM.html",
+                    mime="text/html",
+                    key="dl_plot_sm",
+                )
 
             # Multimaterial plot
             if result.get("print_passes_mm") is not None and result.get("points") is not None:
@@ -909,6 +923,13 @@ with main_tab:
                     colors=colors,
                 )
                 st.plotly_chart(fig_mm, use_container_width=True)
+                st.download_button(
+                    label="Download MM Print Passes (HTML)",
+                    data=fig_mm.to_html(full_html=True, include_plotlyjs="cdn").encode("utf-8"),
+                    file_name="print_passes_MM.html",
+                    mime="text/html",
+                    key="dl_plot_mm",
+                )
         else:
             st.info("Plot generation was disabled. Enable it in the Advanced section to see visualizations.")
 

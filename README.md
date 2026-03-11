@@ -250,7 +250,7 @@ This opens a browser at **http://localhost:8501** with:
 5. (Optional) Enable **Custom G-code** in the Advanced section to reveal the Custom G-code tab (see below)
 6. Click **Run X-CAVATE** in the Pipeline tab
 7. Watch the progress bar as the pipeline runs through all 7 steps
-8. View the interactive 3D plots: original network, single-material passes, and multimaterial passes (if enabled)
+8. View the interactive 3D plots: original network, single-material passes, and multimaterial passes (if enabled). Each plot has a download button to save it as a standalone HTML file.
 9. Download G-code, coordinate files, and changelog
 10. Check the **Print Instructions** tab for step-by-step printing guidance
 
