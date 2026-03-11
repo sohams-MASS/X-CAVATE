@@ -21,7 +21,6 @@ class PathfindingAlgorithm(Enum):
 class OverlapAlgorithm(Enum):
     """Available overlap algorithms."""
     RETRACE = "retrace"        # Original: scan all previous passes, retrace backwards
-    CONSECUTIVE = "consecutive" # Refactored: check consecutive pass pairs for neighbors
 
 
 @dataclass

@@ -160,18 +160,7 @@ with st.sidebar:
             "Overlap nodes", min_value=0, value=0, step=1,
             help="Number of nodes to retrace at pass boundaries to bridge small gaps. Use 0 to disable.",
         )
-        _overlap_algo_labels = {
-            "Retrace (original)": OverlapAlgorithm.RETRACE,
-            "Consecutive (fast)": OverlapAlgorithm.CONSECUTIVE,
-        }
-        overlap_algo_label = st.selectbox(
-            "Overlap algorithm",
-            options=list(_overlap_algo_labels.keys()),
-            index=0,
-            help="'Retrace' scans all previous passes for shared nodes (original behavior). "
-                 "'Consecutive' only checks adjacent pass pairs (faster).",
-        )
-        overlap_algorithm = _overlap_algo_labels[overlap_algo_label]
+        overlap_algorithm = OverlapAlgorithm.RETRACE
         generate_plots = st.toggle(
             "Generate plots", value=True,
             help="Create interactive 3D HTML visualizations of the network and print passes in the output folder.",

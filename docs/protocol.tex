@@ -490,7 +490,7 @@ These settings only apply when \gui{Printer type} is set to \textbf{Positive Ink
 \gui{Custom G-code} & Toggle & Off & Enable custom G-code templates. When on, a tabbed editor appears in the main area with four tabs: \textbf{Header}, \textbf{Single Material}, \textbf{Multimaterial}, \textbf{Dwell}. Paste your G-code snippets into the text areas (see Part~C). \\
 \gui{Pathfinding algorithm} & Selectbox & DFS & \textbf{DFS}: modified depth-first search with KD-tree collision detection. \\
 \gui{Overlap nodes} & Integer & 0 & Number of overlap nodes to add at pass junctions (0 = disabled). Improves print continuity at branchpoints. \\
-\gui{Overlap algorithm} & Selectbox & Retrace & Only visible when overlap $> 0$. \textbf{Retrace (original)}: scans all previous passes for shared nodes, retraces backwards, appends to end of current pass. \textbf{Consecutive (fast)}: checks only adjacent pass pairs, prepends to start of next pass. \\
+\gui{Overlap algorithm} & Selectbox & Retrace & Only visible when overlap $> 0$. \textbf{Retrace}: scans all previous passes for shared nodes, retraces backwards, appends to end of current pass. \\
 \gui{Generate plots} & Toggle & On & Generate interactive 3D Plotly visualizations. \\
 \gui{Speed calculation} & Toggle & Off & Compute per-node print speeds based on vessel radii and flow rate: $v = \text{flow} / (\pi r^2)$. Requires column~4 (radius) in the network file. \\
 \bottomrule
@@ -642,7 +642,7 @@ xcavate \
 \midrule
 \code{--algorithm} & str & dfs & Pathfinding: \code{dfs} or \code{sweep\_line}. \\
 \code{--num\_overlap} & int & 0 & Number of overlap nodes at junctions. \\
-\code{--overlap\_algorithm} & str & retrace & \code{retrace}: scans all previous passes (original). \code{consecutive}: checks adjacent pairs (faster). \\
+\code{--overlap\_algorithm} & str & retrace & \code{retrace}: scans all previous passes (original). \\
 \code{--downsample\_factor} & int & 1 & Keep every $N$th node. \\
 \code{--close\_sm} & int & 0 & Use SM gap closure file (0/1). \\
 \code{--close\_mm} & int & 0 & Use MM gap closure file (0/1). \\

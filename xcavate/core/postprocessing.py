@@ -132,16 +132,12 @@ def downsample_passes(
 def add_overlap(
     print_passes: Dict[int, List[int]],
     num_overlap: int,
-    graph: Dict[int, List[int]],
-    algorithm: str = "retrace",
 ) -> Dict[int, List[int]]:
     """Add nodal overlap between connected passes for gap closure.
 
     Args:
         print_passes: Current passes.
         num_overlap: Number of overlap nodes to add.
-        graph: Adjacency dict.
-        algorithm: "retrace" (original) or "consecutive" (fast).
 
     Returns:
         Passes with overlapping endpoints.
@@ -149,10 +145,7 @@ def add_overlap(
     if num_overlap <= 0:
         return print_passes
 
-    if algorithm == "retrace":
-        return _add_overlap_retrace(print_passes, num_overlap)
-    else:
-        return _add_overlap_consecutive(print_passes, num_overlap, graph)
+    return _add_overlap_retrace(print_passes, num_overlap)
 
 
 def _add_overlap_retrace(
@@ -205,39 +198,6 @@ def _add_overlap_retrace(
                 result[shared_pass][idx - (idx_count + 1)]
             )
             idx_count += 1
-
-    return result
-
-
-def _add_overlap_consecutive(
-    print_passes: Dict[int, List[int]],
-    num_overlap: int,
-    graph: Dict[int, List[int]],
-) -> Dict[int, List[int]]:
-    """Consecutive overlap: check consecutive pass pairs for graph neighbors.
-
-    For each pair of consecutive passes where the last node of pass i is a
-    graph neighbor of the first node of pass i+1, extend pass i+1 by prepending
-    up to `num_overlap` nodes from the end of pass i.
-    """
-    result = {i: list(v) for i, v in print_passes.items()}
-    pass_indices = sorted(result.keys())
-
-    for idx in range(len(pass_indices) - 1):
-        curr_key = pass_indices[idx]
-        next_key = pass_indices[idx + 1]
-        curr_pass = result[curr_key]
-        next_pass = result[next_key]
-
-        if not curr_pass or not next_pass:
-            continue
-
-        last_of_curr = curr_pass[-1]
-        first_of_next = next_pass[0]
-
-        if first_of_next in graph.get(last_of_curr, []):
-            overlap = curr_pass[-min(num_overlap, len(curr_pass)):]
-            result[next_key] = overlap + next_pass
 
     return result
 

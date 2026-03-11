@@ -508,7 +508,7 @@ from the argument parser in \code{xcavate/cli.py}.
 \textbf{Flag} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
 \midrule
 \code{-{}-num\_overlap} & int & 0 & Overlap nodes at pass boundaries. \\
-\code{-{}-overlap\_algorithm} & str & retrace & Overlap algorithm: \code{retrace} (original) or \code{consecutive} (fast). \\
+\code{-{}-overlap\_algorithm} & str & retrace & Overlap algorithm: \code{retrace} (original). \\
 \code{-{}-close\_sm} & int & 0 & Load gap closure file for SM? (1=yes, 0=no). \\
 \code{-{}-close\_mm} & int & 0 & Load gap closure file for MM? (1=yes, 0=no). \\
 \bottomrule
@@ -741,7 +741,6 @@ PathfindingAlgorithm.DFS        # "dfs" - Modified depth-first search
 
 # OverlapAlgorithm
 OverlapAlgorithm.RETRACE      # "retrace" - Scan all previous passes
-OverlapAlgorithm.CONSECUTIVE   # "consecutive" - Check adjacent pairs
 \end{lstlisting}
 
 \subsection{run\_xcavate() Function}

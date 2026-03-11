@@ -22,7 +22,7 @@ from typing import Callable, Dict, List, Optional
 
 import numpy as np
 
-from xcavate.config import OverlapAlgorithm, PrinterType, XcavateConfig
+from xcavate.config import PrinterType, XcavateConfig
 
 logger = logging.getLogger(__name__)
 
@@ -191,8 +191,7 @@ def run_xcavate(
     # Optional overlap
     if config.num_overlap > 0:
         print_passes_sm = add_overlap(
-            print_passes_sm, config.num_overlap, graph,
-            algorithm=config.overlap_algorithm.value,
+            print_passes_sm, config.num_overlap,
         )
 
     # Reorder for minimal travel
@@ -233,8 +232,7 @@ def run_xcavate(
         # Overlap
         if config.num_overlap > 0:
             print_passes_mm = add_overlap(
-                print_passes_mm, config.num_overlap, graph,
-                algorithm=config.overlap_algorithm.value,
+                print_passes_mm, config.num_overlap,
             )
 
         # Re-classify after subdivision

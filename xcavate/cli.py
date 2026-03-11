@@ -91,8 +91,8 @@ def build_parser() -> argparse.ArgumentParser:
     # --- Gap closure ---
     p.add_argument("--num_overlap", type=int, default=0, help="Overlap nodes")
     p.add_argument("--overlap_algorithm", type=str, default="retrace",
-                    choices=["retrace", "consecutive"],
-                    help="Overlap algorithm: 'retrace' (original) or 'consecutive' (fast)")
+                    choices=["retrace"],
+                    help="Overlap algorithm: 'retrace' (original)")
     p.add_argument("--close_sm", type=int, default=0,
                     help="Gap closure file for single material? (1=yes, 0=no)")
     p.add_argument("--close_mm", type=int, default=0,

@@ -507,7 +507,7 @@ When \gui{Separate arterial/venous} is \textbf{on}, four fields appear instead:
 \gui{Custom G-code} & toggle & Off & Enable to provide custom G-code templates (reveals the Custom G-code tab). \\
 \gui{Pathfinding algorithm} & select & DFS & DFS: modified depth-first search with KD-tree collision detection. \\
 \gui{Overlap nodes} & int & 0 & Number of nodes to retrace at pass boundaries to bridge small gaps. \\
-\gui{Overlap algorithm} & select & Retrace & ``Retrace'' scans all previous passes (original). ``Consecutive'' checks adjacent pairs (faster). \\
+\gui{Overlap algorithm} & select & Retrace & ``Retrace'' scans all previous passes for shared nodes and retraces backwards to add overlap. \\
 \gui{Generate plots} & toggle & On & Create interactive 3D HTML visualizations. \\
 \gui{Speed calculation} & toggle & Off & Compute per-node print speed from vessel radius and flow rate. \\
 \gui{Gap closure (SM)} & toggle & Off & Load gap extension files for SM prints. When on, shows file uploaders for pass indices and deltas. \\
