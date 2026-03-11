@@ -732,7 +732,7 @@ docker run -p 8501:8501 xcavate
 
 ## Volumetric Flow Rate
 
-The volumetric flow rate `Q` of the ink through the printhead nozzle varies with the ink, syringe, and nozzle. It can be experimentally determined using the calibration module. This value is necessary when printing vessels of varying radii. If not specified, X-CAVATE defaults to 0.127 mm^3/s.
+The volumetric flow rate `Q` of the ink through the printhead nozzle varies with the ink, syringe, and nozzle. It can be experimentally determined using the Calibration tab in the GUI: hold pressure constant, print calibration filaments at different speeds (one speed per target diameter group), measure the resulting filament diameters, and compute `Q = v * π * r²` for each group. This value is necessary when printing vessels of varying radii. If not specified, X-CAVATE defaults to 0.127 mm^3/s.
 
 ## Tolerancing
 
