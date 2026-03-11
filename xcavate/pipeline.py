@@ -311,8 +311,8 @@ def run_xcavate(
             network_top=network_top,
         )
 
-    # Print operator instructions
-    _print_instructions(config, points_interp, print_passes_sm)
+    # Compute and print operator instructions
+    instructions = _compute_instructions(config, points_interp, print_passes_sm)
 
     elapsed = time.time() - t0
     logger.info("X-CAVATE completed in %.1f seconds", elapsed)
@@ -326,6 +326,7 @@ def run_xcavate(
         "speed_map_sm": speed_map_sm,
         "speed_map_mm": speed_map_mm,
         "material_map": material_map,
+        "instructions": instructions,
     }
 
 
@@ -522,14 +523,15 @@ def _write_plots(
         fig_mm.write_html(str(config.plots_dir / "network_MM.html"))
 
 
-def _print_instructions(
+def _compute_instructions(
     config: XcavateConfig,
     points: np.ndarray,
     print_passes_sm: Dict[int, List[int]],
-) -> None:
-    """Print operator-facing instructions for centering the print.
+) -> dict:
+    """Compute and print operator-facing instructions for centering the print.
 
-    Replicates xcavate.py lines 5488-5565.
+    Replicates xcavate.py lines 5488-5565.  Returns a structured dict so that
+    the GUI can display the same information without parsing stdout.
     """
     # Network bounding box
     min_x = float(np.min(points[:, 0]))
@@ -556,73 +558,119 @@ def _print_instructions(
     y_start = (config.container_y + forward - backward) / 2
     z_start = (config.container_height - total_z) / 2
 
-    print("\n")
-    print(f"For a container of dimensions x={config.container_x} mm, "
-          f"y={config.container_y} mm, z={config.container_height}mm, "
-          f"center the print by following these instructions.")
+    # Padding
+    pad_left = round(x_start - left, 2)
+    pad_right = round(config.container_x - (x_start + right), 2)
+    pad_back = round(config.container_y - (y_start + backward), 2)
+    pad_front = round(y_start - forward, 2)
 
-    # Single material instructions
+    # Build instruction strings
+    sm_instructions = [
+        f"For a container of dimensions x={config.container_x} mm, "
+        f"y={config.container_y} mm, z={config.container_height} mm, "
+        f"center the print by following these instructions.",
+        "",
+        "**If +x is right, +y is backwards, and +z is upwards** "
+        "(with respect to nozzle's movement or relative movement to the printbed):",
+        "1. Position nozzle in left corner of the container, "
+        "of the container face closest to the observer.",
+        "",
+        "**If +x is left, +y is forwards, and +z is upwards** "
+        "(with respect to nozzle's movement or relative movement to the printbed):",
+        "1. Position nozzle in right corner of the container, "
+        "of the container face farthest from the observer.",
+        "",
+        "2. Enter the G-code command: `G92 X0 Y0`",
+        f"3. Move linearly to X{round(x_start, 2)} Y{round(y_start, 2)} "
+        f"with G-code command: `G1 X{round(x_start, 2)} Y{round(y_start, 2)}`",
+        f"4. Manually maneuver the Z-axis until it is {round(z_start, 2)} mm "
+        f"from the bottom of the container.",
+        "5. Press start!",
+    ]
+
+    mm_calibration = [
+        "If you have not already calibrated, calibrate as below:",
+        "To find the offset in x- and y- between the two nozzles:",
+        f"1. Position first nozzle (arterial) on the Calibration Tip "
+        f"and enter: `G92 X0 Y0 {config.axis_1}0`",
+        f"2. Position second nozzle (venous) on the Calibration Tip "
+        f"and enter: `G92 {config.axis_2}0`",
+        "3. BEFORE MOVING ANYTHING, record the offset between the nozzles "
+        "in X and Y, which will be the current x- and y-coordinates of the "
+        "venous nozzle.",
+        "4. Re-run X-CAVATE, inputting the offsets as offset_x and offset_y. "
+        "Use the front_nozzle variable to specify whether the venous nozzle "
+        "(right printhead) is in front (front_nozzle=1) or behind "
+        "(front_nozzle=2) the arterial nozzle (left printhead).",
+    ]
+
+    mm_instructions = [
+        "To position for multimaterial printing, after completing the calibration:",
+        "",
+        "**If +x is right, +y is backwards, and +z is upwards** "
+        "(with respect to nozzle's movement or relative movement to the printbed):",
+        "1. Position first nozzle (arterial) in left corner of the container, "
+        "of the container face closest to the observer.",
+        "",
+        "**If +x is left, +y is forwards, and +z is upwards** "
+        "(with respect to nozzle's movement or relative movement to the printbed):",
+        "1. Position second nozzle (venous) in right corner of the container, "
+        "of the container face farthest from the observer.",
+        "",
+        "2. Enter the G-code command: `G92 X0 Y0`",
+        f"3. Enter: `G1 X{round(x_start, 2)} Y{round(y_start, 2)}`",
+        f"4. Enter: `G1 {config.axis_1}0 {config.axis_2}0`",
+        f"5. Manually maneuver FIRST nozzle until it is {round(z_start, 2)} mm "
+        f"from the bottom of the container.",
+        "6. Record the current z-position of FIRST nozzle, and DO NOT RE-ZERO. "
+        "Will now move the SECOND nozzle to the same z-position.",
+        f"7. Enter: `G1 {config.axis_2}(current position of FIRST nozzle)`",
+        "8. Just to reiterate... DO NOT RE-ZERO. Both nozzles are now at "
+        "the correct starting position.",
+        "9. Press start!",
+    ]
+
+    # --- Still print to stdout for CLI users ---
+    print("\n")
+    print(sm_instructions[0])
     print("\nFor SINGLE material:")
-    print("\nIf +x is right, +y is backwards, and +z is upwards "
-          "(with respect to nozzle's movement or relative movement to the printbed):")
-    print("1. Position nozzle in left corner of the container, "
-          "of the container face closest to the observer.")
-    print("\nIf +x is left, +y is forwards, and +z is upwards "
-          "(with respect to nozzle's movement or relative movement to the printbed):")
-    print("1. Position nozzle in right corner of the container, "
-          "of the container face farthest from the observer.")
-    print("\n2. Enter the g-code command: G92 X0 Y0")
-    print(f"3. Move linearly to X{round(x_start, 2)} Y{round(y_start, 2)} "
-          f"with g-code command: G1 X{round(x_start, 2)} Y{round(y_start, 2)}")
-    print(f"4. Manually maneuver the Z-axis until it is {round(z_start, 2)} mm "
-          f"from the bottom of the container.")
-    print("5. Press start!")
+    for line in sm_instructions[1:]:
+        print(line)
 
-    # Multimaterial calibration instructions
-    print(f"\nfor MULTIMATERIAL:\n")
-    print("If you have not already calibrated, calibrate as below:")
-    print("To find the offset in x- and y- between the two nozzles:")
-    print(f"1. Position first nozzle (arterial) on the Calibration Tip "
-          f"and enter: G92 X0 Y0 {config.axis_1}0")
-    print(f"2. Position second nozzle (venous) on the Calibration Tip "
-          f"and enter: G92 {config.axis_2}0")
-    print("3. BEFORE MOVING ANYTHING, record the offset between the nozzles "
-          "in X and Y, which will be the current x- and y-coordinates of the "
-          "venous nozzle.")
-    print("4. Re-run x-cavate, inputting the offsets at the command line as "
-          "offset_x and offset_y. Use the front_nozzle variable to specify "
-          "whether the venous nozzle (right printhead) is in front "
-          "(front_nozzle=1) or behind (front_nozzle=2) the arterial nozzle "
-          "(left printhead).")
+    print(f"\nFor MULTIMATERIAL:\n")
+    for line in mm_calibration:
+        print(line)
+    print()
+    for line in mm_instructions:
+        print(line)
 
-    # Multimaterial printing instructions
-    print("\nTo position for multimaterial printing, after completing "
-          "the calibration:")
-    print("\nIf +x is right, +y is backwards, and +z is upwards "
-          "(with respect to nozzle's movement or relative movement to the printbed):")
-    print("1. Position first nozzle (arterial) in left corner of the container, "
-          "of the container face closest to the observer.")
-    print("\nIf +x is left, +y is forwards, and +z is upwards "
-          "(with respect to nozzle's movement or relative movement to the printbed):")
-    print("1. Position second nozzle (venous) in right corner of the container, "
-          "of the container face farthest from the observer.")
-    print("\n2. Enter the g-code command: G92 X0 Y0")
-    print(f"3. Enter: G1 X{round(x_start, 2)} Y{round(y_start, 2)}")
-    print(f"4. Enter: G1 {config.axis_1}0 {config.axis_2}0")
-    print(f"5. Manually maneuver FIRST nozzle until it is {round(z_start, 2)} mm "
-          f"from the bottom of the container.")
-    print("6. Record the current z-position of FIRST nozzle, and DO NOT RE-ZERO. "
-          "Will now move the SECOND nozzle to the same z-position.")
-    print(f"7. Enter: G1 {config.axis_2}(current position of FIRST nozzle)")
-    print("8. Just to reiterate... DO NOT RE-ZERO. Both nozzles are now at "
-          "the correct starting position.")
-    print("9. Press start!")
-
-    # Padding report
-    print(f"\n")
-    print("Your print will have the following padding:\n")
-    print(f"left padding: {round(x_start - left, 2)}")
-    print(f"right padding: {round(config.container_x - (x_start + right), 2)}")
-    print(f"back padding: {round(config.container_y - (y_start + backward), 2)}")
-    print(f"front padding: {round(y_start - forward, 2)}")
+    print(f"\nYour print will have the following padding:\n")
+    print(f"left padding: {pad_left}")
+    print(f"right padding: {pad_right}")
+    print(f"back padding: {pad_back}")
+    print(f"front padding: {pad_front}")
     print("\n")
+
+    return {
+        "container_dims": {
+            "x": config.container_x,
+            "y": config.container_y,
+            "z": config.container_height,
+        },
+        "start_position": {
+            "x": round(x_start, 2),
+            "y": round(y_start, 2),
+            "z": round(z_start, 2),
+        },
+        "padding": {
+            "left": pad_left,
+            "right": pad_right,
+            "front": pad_front,
+            "back": pad_back,
+        },
+        "sm_instructions": sm_instructions,
+        "mm_calibration": mm_calibration,
+        "mm_instructions": mm_instructions,
+        "axis_1": config.axis_1,
+        "axis_2": config.axis_2,
+    }

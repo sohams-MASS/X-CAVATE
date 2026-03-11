@@ -935,3 +935,112 @@ if result is not None and config_saved is not None:
             )
         else:
             st.caption("No changelog generated.")
+
+    # ------------------------------------------------------------------
+    # Print Instructions
+    # ------------------------------------------------------------------
+    instructions = result.get("instructions")
+    if instructions is not None:
+        st.divider()
+        st.subheader("Print Instructions")
+
+        # Start position metrics
+        pos = instructions["start_position"]
+        pos_cols = st.columns(3)
+        pos_cols[0].metric("Start X (mm)", pos["x"])
+        pos_cols[1].metric("Start Y (mm)", pos["y"])
+        pos_cols[2].metric("Start Z (mm)", pos["z"])
+
+        # Padding info
+        pad = instructions["padding"]
+        pad_cols = st.columns(4)
+        pad_cols[0].metric("Left padding", f"{pad['left']} mm")
+        pad_cols[1].metric("Right padding", f"{pad['right']} mm")
+        pad_cols[2].metric("Front padding", f"{pad['front']} mm")
+        pad_cols[3].metric("Back padding", f"{pad['back']} mm")
+
+        with st.expander("Single Material Instructions", expanded=True):
+            for line in instructions["sm_instructions"]:
+                st.markdown(line)
+
+        with st.expander("Multimaterial Calibration"):
+            for line in instructions["mm_calibration"]:
+                st.markdown(line)
+
+        with st.expander("Multimaterial Positioning"):
+            for line in instructions["mm_instructions"]:
+                st.markdown(line)
+
+# ---------------------------------------------------------------------------
+# Calibration Validation (independent of pipeline run -- always visible)
+# ---------------------------------------------------------------------------
+
+st.divider()
+st.subheader("Calibration Validation")
+st.caption(
+    "Compare target filament diameters against measured values from a CSV. "
+    "The CSV must have a column named **Length** with measurements in microns."
+)
+
+cal_csv_upload = st.file_uploader(
+    "Upload measured diameters CSV",
+    type=["csv"],
+    help="CSV file with a 'Length' column containing measured filament diameters in microns.",
+)
+
+cal_targets_str = st.text_input(
+    "Target diameters (comma-separated, mm)",
+    value="0.4, 0.375, 0.35, 0.325, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1, 0.075",
+    help="Comma-separated list of expected filament diameters in mm, in the same order as the measurements.",
+)
+
+cal_measurements_per = st.number_input(
+    "Measurements per target",
+    value=3,
+    min_value=1,
+    step=1,
+    help="Number of rows in the CSV to average for each target diameter.",
+)
+
+cal_run = st.button("Run Validation", disabled=(cal_csv_upload is None))
+
+if cal_run and cal_csv_upload is not None:
+    try:
+        target_diameters = [float(x.strip()) for x in cal_targets_str.split(",")]
+        csv_bytes = cal_csv_upload.getvalue()
+
+        from xcavate.core.calibration import validate_calibration
+
+        cal_result = validate_calibration(
+            target_diameters=target_diameters,
+            measured_csv_bytes=csv_bytes,
+            measurements_per_target=cal_measurements_per,
+        )
+
+        st.session_state.cal_result = cal_result
+    except Exception as exc:
+        st.error(f"Calibration validation failed: {exc}")
+        st.exception(exc)
+
+if "cal_result" in st.session_state and st.session_state.cal_result is not None:
+    cal_result = st.session_state.cal_result
+
+    st.plotly_chart(cal_result["figure"], use_container_width=True)
+
+    cal_dl_cols = st.columns(2)
+    with cal_dl_cols[0]:
+        st.download_button(
+            label="Download CSV report",
+            data=cal_result["csv_bytes"],
+            file_name="calibration_error.csv",
+            mime="text/csv",
+            key="dl_cal_csv",
+        )
+    with cal_dl_cols[1]:
+        st.download_button(
+            label="Download HTML report",
+            data=cal_result["html_bytes"],
+            file_name="calibration_error.html",
+            mime="text/html",
+            key="dl_cal_html",
+        )
