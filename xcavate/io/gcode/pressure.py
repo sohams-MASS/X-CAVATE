@@ -38,6 +38,7 @@ class PressureGcodeWriter(GcodeWriter):
                 f.write(f"G92 X{x} Y{y} \n")
                 self._write_custom(f, self.codes.start_extrusion_ph2 if self.codes else "")
                 self._write_custom(f, self.codes.start_extrusion_ph1 if self.codes else "")
+                self._write_custom(f, self.codes.dwell_start if self.codes else "")
                 f.write(f"G1 X{x} Y{y} {self._curr_axis}{z} F{speed} \n")
                 self._curr = 0
             else:
@@ -45,12 +46,14 @@ class PressureGcodeWriter(GcodeWriter):
                 f.write(f"G92 X{x} Y{y} {cfg.axis_1}{z} {cfg.axis_2}{z} \n")
                 f.write("G90 F0.5 \n")
                 self._write_custom(f, self.codes.start_extrusion_ph1 if self.codes else "")
+                self._write_custom(f, self.codes.dwell_start if self.codes else "")
                 f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed} \n")
         else:
             f.write("; Print Pass 0 \n")
             f.write(f"G92 X{x} Y{y} {cfg.axis_1}{z} \n")
             f.write(f"G90 F{speed} \n")
             self._write_custom(f, self.codes.start_extrusion if self.codes else "")
+            self._write_custom(f, self.codes.dwell_start if self.codes else "")
             f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed} \n")
 
     def _write_pass_start(self, f: TextIO, pass_idx, x, y, z, speed, artven, prev_x, prev_y):
@@ -66,6 +69,7 @@ class PressureGcodeWriter(GcodeWriter):
             f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z}\n")
             f.write("G91 \n")
             self._write_custom(f, self.codes.start_extrusion if self.codes else "")
+            self._write_custom(f, self.codes.dwell_start if self.codes else "")
             f.write("G90 \n")
             f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed}\n")
 
@@ -96,6 +100,7 @@ class PressureGcodeWriter(GcodeWriter):
             f.write(f"G1 X{x} Y{y} {self._curr_axis}{z} \n")
             self._write_custom(f, self.codes.start_extrusion_ph1 if self.codes else "")
             self._write_custom(f, self.codes.start_extrusion_ph2 if self.codes else "")
+            self._write_custom(f, self.codes.dwell_start if self.codes else "")
             self._curr = 1
         elif need_switch_to_ven:
             self._curr_axis = cfg.axis_2
@@ -115,12 +120,14 @@ class PressureGcodeWriter(GcodeWriter):
             f.write(f"G90 G1 X{x} Y{y} {self._curr_axis}{z} \n")
             self._write_custom(f, self.codes.start_extrusion_ph2 if self.codes else "")
             self._write_custom(f, self.codes.start_extrusion_ph1 if self.codes else "")
+            self._write_custom(f, self.codes.dwell_start if self.codes else "")
             self._curr = 0
         else:
             f.write(f"G1 X{x} Y{y} \n")
             f.write(f"G1 X{x} Y{y} {self._curr_axis}{z} \n")
             self._write_custom(f, self.codes.start_extrusion_ph1 if self.codes else "")
             self._write_custom(f, self.codes.start_extrusion_ph2 if self.codes else "")
+            self._write_custom(f, self.codes.dwell_start if self.codes else "")
             f.write(f"G1 X{x} Y{y} {self._curr_axis}{z} F{speed} \n")
 
     def _write_move(self, f: TextIO, node, j_counter, x, y, z, speed, points, nd, pass_nodes):
@@ -132,6 +139,7 @@ class PressureGcodeWriter(GcodeWriter):
     def _write_pass_end(self, f: TextIO, network_top: float):
         cfg = self.config
         if cfg.multimaterial:
+            self._write_custom(f, self.codes.dwell_end if self.codes else "")
             self._write_custom(f, self.codes.stop_extrusion_ph1 if self.codes else "")
             self._write_custom(f, self.codes.stop_extrusion_ph2 if self.codes else "")
             f.write(f"G91 G1 {self._curr_axis}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
@@ -139,6 +147,7 @@ class PressureGcodeWriter(GcodeWriter):
             f.write(f"; ending on {'ARTERIAL' if self._curr == 1 else 'VENOUS'} \n")
         else:
             f.write("G91 \n")
+            self._write_custom(f, self.codes.dwell_end if self.codes else "")
             self._write_custom(f, self.codes.stop_extrusion if self.codes else "")
             f.write(f"G1 {cfg.axis_1}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
             f.write("G90 \n")

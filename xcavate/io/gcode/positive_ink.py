@@ -64,6 +64,7 @@ class PositiveInkGcodeWriter(GcodeWriter):
             if cfg.custom_gcode and self.codes:
                 f.write("G91 \n")
                 self._write_custom(f, self.codes.start_extrusion_ph1)
+                self._write_custom(f, self.codes.dwell_start)
                 f.write("G90 \n")
                 self._plunger_v += cfg.positive_ink_start_venous
             self._curr = 0
@@ -75,6 +76,7 @@ class PositiveInkGcodeWriter(GcodeWriter):
             if cfg.custom_gcode and self.codes:
                 f.write("G91 \n")
                 self._write_custom(f, self.codes.start_extrusion_ph2)
+                self._write_custom(f, self.codes.dwell_start)
                 f.write("G90 \n")
                 self._plunger_a += cfg.positive_ink_start_arterial
 
@@ -101,6 +103,7 @@ class PositiveInkGcodeWriter(GcodeWriter):
             if cfg.custom_gcode and self.codes:
                 f.write("G91 \n")
                 self._write_custom(f, self.codes.start_extrusion_ph1)
+                self._write_custom(f, self.codes.dwell_start)
                 f.write("G90 \n")
                 self._plunger_a += cfg.positive_ink_start_arterial
             self._curr = 1
@@ -120,6 +123,7 @@ class PositiveInkGcodeWriter(GcodeWriter):
             if cfg.custom_gcode and self.codes:
                 f.write("G91 \n")
                 self._write_custom(f, self.codes.start_extrusion_ph2)
+                self._write_custom(f, self.codes.dwell_start)
                 f.write("G90 \n")
                 self._plunger_v += cfg.positive_ink_start_venous
             self._curr = 0
@@ -130,11 +134,13 @@ class PositiveInkGcodeWriter(GcodeWriter):
                 if self._curr_axis == cfg.axis_1:
                     f.write("G91 \n")
                     self._write_custom(f, self.codes.start_extrusion_ph1)
+                    self._write_custom(f, self.codes.dwell_start)
                     f.write("G90 \n")
                     self._plunger_a += cfg.positive_ink_start_arterial
                 else:
                     f.write("G91 \n")
                     self._write_custom(f, self.codes.start_extrusion_ph2)
+                    self._write_custom(f, self.codes.dwell_start)
                     f.write("G90 \n")
                     self._plunger_v += cfg.positive_ink_start_venous
 
@@ -165,6 +171,7 @@ class PositiveInkGcodeWriter(GcodeWriter):
         cfg = self.config
         f.write("G91 \n")
         if cfg.custom_gcode and self.codes:
+            self._write_custom(f, self.codes.dwell_end)
             if self._curr_axis == cfg.axis_1:
                 self._write_custom(f, self.codes.stop_extrusion_ph1)
                 self._plunger_a += cfg.positive_ink_end_arterial

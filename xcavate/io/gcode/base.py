@@ -32,7 +32,8 @@ class CustomCodes:
     active_pressure_ph2: str = ""
     rest_pressure_ph1: str = ""
     rest_pressure_ph2: str = ""
-    dwell_code: str = ""
+    dwell_start: str = ""
+    dwell_end: str = ""
 
     @classmethod
     def load_from_dir(cls, custom_dir: Path) -> "CustomCodes":
@@ -55,7 +56,8 @@ class CustomCodes:
             active_pressure_ph2=_read("active_pressure_printhead2.txt"),
             rest_pressure_ph1=_read("rest_pressure_printhead1.txt"),
             rest_pressure_ph2=_read("rest_pressure_printhead2.txt"),
-            dwell_code=_read("dwell_code.txt"),
+            dwell_start=_read("dwell_start.txt"),
+            dwell_end=_read("dwell_end.txt"),
         )
 
 

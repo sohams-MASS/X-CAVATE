@@ -177,20 +177,24 @@ with st.sidebar:
             step=0.1,
             format="%.2f",
         )
-        dwell_start = st.number_input(
-            "Dwell start (s)",
-            min_value=0.0,
-            value=0.08,
-            step=0.01,
-            format="%.3f",
-        )
-        dwell_end = st.number_input(
-            "Dwell end (s)",
-            min_value=0.0,
-            value=0.08,
-            step=0.01,
-            format="%.3f",
-        )
+        if printer_type == PrinterType.AEROTECH:
+            dwell_start = st.number_input(
+                "Dwell start (s)",
+                min_value=0.0,
+                value=0.08,
+                step=0.01,
+                format="%.3f",
+            )
+            dwell_end = st.number_input(
+                "Dwell end (s)",
+                min_value=0.0,
+                value=0.08,
+                step=0.01,
+                format="%.3f",
+            )
+        else:
+            dwell_start = 0.08
+            dwell_end = 0.08
 
     # -- Geometry --
     with st.expander("Geometry"):
@@ -453,7 +457,8 @@ _CUSTOM_GCODE_FIELDS = {
     "cg_active_pressure_ph2":   {"label": "Active pressure \u2014 Printhead 2",   "file": "active_pressure_printhead2.txt"},
     "cg_rest_pressure_ph1":     {"label": "Resting pressure \u2014 Printhead 1",  "file": "rest_pressure_printhead1.txt"},
     "cg_rest_pressure_ph2":     {"label": "Resting pressure \u2014 Printhead 2",  "file": "rest_pressure_printhead2.txt"},
-    "cg_dwell":                 {"label": "Dwell code (start / end of pass)",  "file": "dwell_code.txt"},
+    "cg_dwell_start":           {"label": "Dwell code (start of pass)",        "file": "dwell_start.txt"},
+    "cg_dwell_end":             {"label": "Dwell code (end of pass)",          "file": "dwell_end.txt"},
 }
 
 for _key in _CUSTOM_GCODE_FIELDS:
@@ -598,13 +603,23 @@ if custom_gcode:
             "junction, improving the connection via a process similar to \"spot "
             "welding.\""
         )
-        st.session_state["cg_dwell"] = st.text_area(
-            "Dwell code (applied at start and end of each pass)",
-            value=st.session_state["cg_dwell"],
-            height=200,
-            placeholder="; e.g. G4 P80 ; dwell 80 ms",
-            key="ta_cg_dwell",
-        )
+        dwell_cols = st.columns(2)
+        with dwell_cols[0]:
+            st.session_state["cg_dwell_start"] = st.text_area(
+                "Dwell code (start of pass)",
+                value=st.session_state["cg_dwell_start"],
+                height=200,
+                placeholder="; e.g. G4 P80 ; dwell 80 ms",
+                key="ta_cg_dwell_start",
+            )
+        with dwell_cols[1]:
+            st.session_state["cg_dwell_end"] = st.text_area(
+                "Dwell code (end of pass)",
+                value=st.session_state["cg_dwell_end"],
+                height=200,
+                placeholder="; e.g. G4 P80 ; dwell 80 ms",
+                key="ta_cg_dwell_end",
+            )
 
     st.divider()
 

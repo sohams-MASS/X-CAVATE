@@ -44,7 +44,10 @@ class AerotechGcodeWriter(GcodeWriter):
             f.write(f"Enable {cfg.printhead_1} \n")
             f.write(f"G90 F{speed} \n")
             f.write(f"BRAKE {cfg.printhead_1} 0 \n")
-            f.write(f"DWELL {cfg.dwell_start} \n")
+            if self.config.custom_gcode and self.codes and self.codes.dwell_start:
+                self._write_custom(f, self.codes.dwell_start)
+            else:
+                f.write(f"DWELL {cfg.dwell_start} \n")
             f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed}\n")
             return
 
@@ -94,7 +97,10 @@ class AerotechGcodeWriter(GcodeWriter):
             f.write(f"Enable {cfg.printhead_1} \n")
             f.write("G91 \n")
             f.write(f"BRAKE {cfg.printhead_1} 0 \n")
-            f.write(f"DWELL {cfg.dwell_start} \n")
+            if self.config.custom_gcode and self.codes and self.codes.dwell_start:
+                self._write_custom(f, self.codes.dwell_start)
+            else:
+                f.write(f"DWELL {cfg.dwell_start} \n")
             f.write("G90 \n")
             f.write(f"G1 X{x} Y{y} {cfg.axis_1}{z} F{speed}\n")
             return
@@ -168,13 +174,19 @@ class AerotechGcodeWriter(GcodeWriter):
             # Single-material Aerotech: single printhead, single axis
             f.write(f"Enable {cfg.printhead_1} \n")
             f.write("G91 \n")
-            f.write(f"DWELL {cfg.dwell_end} \n")
+            if self.config.custom_gcode and self.codes and self.codes.dwell_end:
+                self._write_custom(f, self.codes.dwell_end)
+            else:
+                f.write(f"DWELL {cfg.dwell_end} \n")
             f.write(f"BRAKE {cfg.printhead_1} 1 \n")
             f.write(f"G1 {cfg.axis_1}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
             f.write("G90 \n")
             f.write(f"G1 {cfg.axis_1}{network_top} F{cfg.jog_speed} \n")
         else:
-            f.write(f"DWELL {cfg.dwell_end} \n")
+            if self.config.custom_gcode and self.codes and self.codes.dwell_end:
+                self._write_custom(f, self.codes.dwell_end)
+            else:
+                f.write(f"DWELL {cfg.dwell_end} \n")
             f.write(f"BRAKE {self._curr_ph} 1 \n")
             f.write(f"BRAKE {self._other_ph} 1 \n")
             f.write(f"G91 G1 {self._curr_axis}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
@@ -187,10 +199,20 @@ class AerotechGcodeWriter(GcodeWriter):
         f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} \n")
         f.write("M2 \n")
 
+    def _write_custom(self, f: TextIO, code: str):
+        """Write custom G-code snippet if available."""
+        if self.config.custom_gcode and code:
+            f.write(code)
+            if not code.endswith("\n"):
+                f.write("\n")
+
     def _write_enable(self, f: TextIO):
         """Write Enable/Brake/Dwell sequence for starting extrusion."""
         f.write(f"Enable {self._curr_ph} \n")
         f.write(f"Enable {self._other_ph} \n")
         f.write(f"BRAKE {self._other_ph} 0 \n")
         f.write(f"BRAKE {self._curr_ph} 0 \n")
-        f.write(f"DWELL {self.config.dwell_start} \n")
+        if self.config.custom_gcode and self.codes and self.codes.dwell_start:
+            self._write_custom(f, self.codes.dwell_start)
+        else:
+            f.write(f"DWELL {self.config.dwell_start} \n")
