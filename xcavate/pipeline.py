@@ -271,8 +271,6 @@ def run_xcavate(
             config, print_passes_sm, print_passes_mm,
             points_interp, material_map,
             points_original=points, coord_num_dict_original=coord_num_dict,
-            was_downsampled=config.downsample and config.downsample_factor > 1,
-            has_overlap=config.num_overlap > 0,
         )
 
     # Compute network top for G-code
@@ -480,47 +478,46 @@ def _write_plots(
     material_map: Optional[Dict[int, int]],
     points_original: Optional[np.ndarray] = None,
     coord_num_dict_original: Optional[Dict[int, int]] = None,
-    was_downsampled: bool = False,
-    has_overlap: bool = False,
 ) -> None:
-    """Generate and save interactive 3D plots."""
-    from xcavate.viz.plotting import create_network_plot, create_original_network_plot
+    """Generate and save interactive 3D plots (parallelized)."""
+    from concurrent.futures import ThreadPoolExecutor
+    from xcavate.viz.plotting import create_network_plot_merged, create_original_network_plot
     from xcavate.core.multimaterial import generate_multimaterial_colors
 
-    # Original network plot (pre-interpolation)
-    if points_original is not None and coord_num_dict_original is not None:
-        fig_orig = create_original_network_plot(
-            points_original, coord_num_dict_original, title="Original Network",
-        )
-        fig_orig.write_html(str(config.plots_dir / "network_original.html"))
+    def _write_original():
+        if points_original is not None and coord_num_dict_original is not None:
+            fig = create_original_network_plot(
+                points_original, coord_num_dict_original, title="Original Network",
+            )
+            fig.write_html(
+                str(config.plots_dir / "network_original.html"),
+                include_plotlyjs="cdn",
+            )
 
-    # Single material plot
-    fig_sm = create_network_plot(
-        print_passes_sm, points, title="Single Material",
-    )
-    fig_sm.write_html(str(config.plots_dir / "network_SM.html"))
-
-    # Downsampled SM plot
-    if was_downsampled:
-        fig_ds = create_network_plot(
-            print_passes_sm, points, title="Downsampled SM",
+    def _write_sm():
+        fig = create_network_plot_merged(
+            print_passes_sm, points, title="Single Material",
         )
-        fig_ds.write_html(str(config.plots_dir / "network_downsampled_SM.html"))
-
-    # SM overlap plot
-    if has_overlap:
-        fig_overlap = create_network_plot(
-            print_passes_sm, points, title="SM with Overlap",
+        fig.write_html(
+            str(config.plots_dir / "network_SM.html"),
+            include_plotlyjs="cdn",
         )
-        fig_overlap.write_html(str(config.plots_dir / "network_SM_overlap.html"))
 
-    # Multimaterial plot
-    if print_passes_mm is not None and material_map is not None:
-        colors = generate_multimaterial_colors(print_passes_mm, material_map)
-        fig_mm = create_network_plot(
-            print_passes_mm, points, title="Multimaterial", colors=colors,
-        )
-        fig_mm.write_html(str(config.plots_dir / "network_MM.html"))
+    def _write_mm():
+        if print_passes_mm is not None and material_map is not None:
+            colors = generate_multimaterial_colors(print_passes_mm, material_map)
+            fig = create_network_plot_merged(
+                print_passes_mm, points, title="Multimaterial", colors=colors,
+            )
+            fig.write_html(
+                str(config.plots_dir / "network_MM.html"),
+                include_plotlyjs="cdn",
+            )
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(fn) for fn in (_write_original, _write_sm, _write_mm)]
+        for f in futures:
+            f.result()  # re-raise any exceptions
 
 
 def _compute_instructions(
