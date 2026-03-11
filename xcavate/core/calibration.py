@@ -94,7 +94,6 @@ def validate_calibration(
 
 
 def compute_flow_rate(
-    target_diameters: list[float],
     measured_csv_bytes: bytes,
     print_speeds: list[float],
     measurements_per_target: int = 3,
@@ -103,19 +102,18 @@ def compute_flow_rate(
     """Compute volumetric flow rate (Q) from calibration measurements.
 
     During calibration the pressure is held constant and the print speed is
-    varied for each target diameter group.  Each group therefore has its own
-    print speed, and Q = v_i * pi * r_i^2 should be roughly constant across
-    groups (since Q is set by the constant pressure).
+    varied for each group.  Each group therefore has its own print speed, and
+    Q = v_i * pi * r_i^2 should be roughly constant across groups (since Q is
+    set by the constant pressure).  The number of groups is determined by the
+    length of *print_speeds*.
 
     Args:
-        target_diameters: Expected diameters in mm (used only to determine the
-            number of groups).
         measured_csv_bytes: Raw bytes of a CSV with a ``"Length"`` column
             containing measured diameters in **microns**.
         print_speeds: Print speeds in mm/s used during calibration, one per
-            target diameter group (same order as *target_diameters*).
+            group.
         measurements_per_target: Number of measurement rows to average per
-            target diameter.
+            group.
         output_dir: If provided, ``Q_pressure.txt`` and
             ``radii_pressure.html`` are written here.
 
@@ -127,16 +125,16 @@ def compute_flow_rate(
     df_raw = pd.read_csv(io.BytesIO(measured_csv_bytes))
     diameter_array = df_raw["Length"].to_numpy() / 1000  # microns -> mm
 
-    n_targets = len(target_diameters)
-    expected_rows = n_targets * measurements_per_target
+    n_groups = len(print_speeds)
+    expected_rows = n_groups * measurements_per_target
     diameter_array = diameter_array[:expected_rows]
     diameter_averages = np.mean(
-        diameter_array.reshape(n_targets, measurements_per_target), axis=1,
+        diameter_array.reshape(n_groups, measurements_per_target), axis=1,
     )
 
-    # Measured radii and per-target Q  (one speed per group)
+    # Measured radii and per-group Q
     radii = diameter_averages / 2
-    speeds_arr = np.array(print_speeds[:n_targets])
+    speeds_arr = np.array(print_speeds)
     q_per_target = speeds_arr * np.pi * radii ** 2
     q_value = float(np.mean(q_per_target))
 
