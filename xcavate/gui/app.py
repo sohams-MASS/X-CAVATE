@@ -966,17 +966,17 @@ with instr_tab:
             pad_cols[2].metric("Front padding", f"{pad['front']} mm")
             pad_cols[3].metric("Back padding", f"{pad['back']} mm")
 
-            with st.expander("Single Material Instructions", expanded=True):
-                for line in instructions["sm_instructions"]:
-                    st.markdown(line)
-
             if config_saved.multimaterial:
-                with st.expander("Multimaterial Calibration"):
+                with st.expander("Multimaterial Calibration", expanded=True):
                     for line in instructions["mm_calibration"]:
                         st.markdown(line)
 
-                with st.expander("Multimaterial Positioning"):
+                with st.expander("Multimaterial Positioning", expanded=True):
                     for line in instructions["mm_instructions"]:
+                        st.markdown(line)
+            else:
+                with st.expander("Single Material Instructions", expanded=True):
+                    for line in instructions["sm_instructions"]:
                         st.markdown(line)
     else:
         st.info("Run the pipeline first to see print instructions.")
