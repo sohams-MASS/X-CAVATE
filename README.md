@@ -239,7 +239,7 @@ This opens a browser at **http://localhost:8501** with:
   - **Pipeline** — Run button, progress bar (7 steps), 3D visualizations (original network, SM, and MM plots), download buttons
   - **Custom G-code** *(appears only when the toggle is on)* — Tabbed template editor for header, extrusion, pressure, and dwell snippets
   - **Print Instructions** — Step-by-step printing instructions for SM and MM modes
-  - **Calibration Validation** — Upload calibration data to validate print accuracy
+  - **Calibration** — Compute volumetric flow rate (Q) and validate print accuracy
 
 **Steps:**
 

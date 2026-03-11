@@ -1,12 +1,13 @@
-"""Calibration validation: compare target vs measured filament diameters.
+"""Calibration helpers: validation and volumetric flow-rate computation.
 
-Replaces the standalone ``calibration_validation.py`` script with a reusable
-function that can be called from both the CLI and the Streamlit GUI.
+Replaces the standalone ``calibration_validation.py`` script with reusable
+functions that can be called from both the CLI and the Streamlit GUI.
 """
 
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -89,4 +90,81 @@ def validate_calibration(
         "csv_bytes": csv_bytes,
         "html_bytes": html_bytes,
         "figure": fig,
+    }
+
+
+def compute_flow_rate(
+    target_diameters: list[float],
+    measured_csv_bytes: bytes,
+    print_speed: float,
+    measurements_per_target: int = 3,
+    output_dir: Path | None = None,
+) -> dict:
+    """Compute volumetric flow rate (Q) from calibration measurements.
+
+    Args:
+        target_diameters: Expected diameters in mm (used only to determine the
+            number of groups).
+        measured_csv_bytes: Raw bytes of a CSV with a ``"Length"`` column
+            containing measured diameters in **microns**.
+        print_speed: Print speed in mm/s used during calibration.
+        measurements_per_target: Number of measurement rows to average per
+            target diameter.
+        output_dir: If provided, ``Q_pressure.txt`` and
+            ``radii_pressure.html`` are written here.
+
+    Returns:
+        Dict with keys ``q_value``, ``figure``, ``q_txt_bytes``,
+        ``html_bytes``.
+    """
+    # Parse CSV
+    df_raw = pd.read_csv(io.BytesIO(measured_csv_bytes))
+    diameter_array = df_raw["Length"].to_numpy() / 1000  # microns -> mm
+
+    n_targets = len(target_diameters)
+    expected_rows = n_targets * measurements_per_target
+    diameter_array = diameter_array[:expected_rows]
+    diameter_averages = np.mean(
+        diameter_array.reshape(n_targets, measurements_per_target), axis=1,
+    )
+
+    # Measured radii and per-target Q
+    radii = diameter_averages / 2
+    q_per_target = print_speed * np.pi * radii ** 2
+    q_value = float(np.mean(q_per_target))
+
+    # Per-target speed from averaged Q
+    speed_per_target = q_value / (np.pi * radii ** 2)
+
+    # Plotly figure: speed vs radius
+    fig = go.Figure(
+        data=go.Scatter(
+            x=np.round(speed_per_target, 4).tolist(),
+            y=np.round(radii, 4).tolist(),
+            mode="lines+markers",
+            name="Calibration Curve",
+        ),
+    )
+    fig.update_layout(
+        title={"text": "Radii vs Speed (Calibration Curve)", "x": 0.5},
+        xaxis_title="Speed (mm/s)",
+        yaxis_title="Radius (mm)",
+        font_family="Avenir",
+    )
+
+    q_txt_bytes = f"{q_value}".encode("utf-8")
+    html_bytes = fig.to_html(full_html=True, include_plotlyjs="cdn").encode("utf-8")
+
+    # Optionally persist to disk
+    if output_dir is not None:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "Q_pressure.txt").write_bytes(q_txt_bytes)
+        (output_dir / "radii_pressure.html").write_bytes(html_bytes)
+
+    return {
+        "q_value": q_value,
+        "figure": fig,
+        "q_txt_bytes": q_txt_bytes,
+        "html_bytes": html_bytes,
     }

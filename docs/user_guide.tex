@@ -1,0 +1,899 @@
+\documentclass[11pt,letterpaper]{article}
+
+% --- Packages ---
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{titlesec}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{parskip}
+\usepackage{array}
+\usepackage{microtype}
+\usepackage{tcolorbox}
+
+% --- Colours ---
+\definecolor{codebg}{gray}{0.95}
+\definecolor{codeframe}{gray}{0.75}
+\definecolor{linkblue}{HTML}{0066CC}
+\definecolor{cautionred}{HTML}{CC0000}
+\definecolor{notegray}{HTML}{555555}
+\definecolor{guicolor}{HTML}{2E7D32}
+\definecolor{tipgreen}{HTML}{1B5E20}
+\definecolor{tipbg}{HTML}{E8F5E9}
+\definecolor{warnbg}{HTML}{FFF3E0}
+\definecolor{warnorange}{HTML}{E65100}
+\definecolor{infobg}{HTML}{E3F2FD}
+\definecolor{infoblue}{HTML}{0D47A1}
+
+% --- Hyperlink styling ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkblue,
+    urlcolor=linkblue,
+    citecolor=linkblue,
+    pdftitle={X-CAVATE GUI User Guide},
+    pdfauthor={X-CAVATE Team},
+    pdfsubject={User Guide for the X-CAVATE Streamlit GUI},
+}
+
+% --- Code listing style ---
+\lstset{
+    backgroundcolor=\color{codebg},
+    frame=single,
+    rulecolor=\color{codeframe},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    breakatwhitespace=false,
+    columns=fullflexible,
+    keepspaces=true,
+    showstringspaces=false,
+    xleftmargin=4pt,
+    xrightmargin=4pt,
+    aboveskip=8pt,
+    belowskip=8pt,
+}
+
+% --- Header / Footer ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textbf{X-CAVATE GUI User Guide}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Custom commands ---
+\newcommand{\caution}[1]{\par\textcolor{cautionred}{\textbf{CAUTION:} #1}\par}
+\newcommand{\note}[1]{\par\textcolor{notegray}{\textbf{Note:} #1}\par}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\gui}[1]{\textcolor{guicolor}{\textsf{\textbf{#1}}}}
+\newcommand{\btn}[1]{\fbox{\textsf{#1}}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\tolerance=400
+\emergencystretch=2em
+
+% --- Callout boxes ---
+\newtcolorbox{tipbox}{
+    colback=tipbg,
+    colframe=tipgreen,
+    coltitle=white,
+    fonttitle=\bfseries,
+    title=Tip,
+    boxrule=0.5pt,
+    arc=2pt,
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+}
+
+\newtcolorbox{warnbox}{
+    colback=warnbg,
+    colframe=warnorange,
+    coltitle=white,
+    fonttitle=\bfseries,
+    title=Warning,
+    boxrule=0.5pt,
+    arc=2pt,
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+}
+
+\newtcolorbox{infobox}{
+    colback=infobg,
+    colframe=infoblue,
+    coltitle=white,
+    fonttitle=\bfseries,
+    title=Info,
+    boxrule=0.5pt,
+    arc=2pt,
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+}
+
+% --- Title ---
+\title{
+    \vspace{-1cm}
+    \textbf{\Huge X-CAVATE}\\[8pt]
+    \LARGE GUI User Guide\\[6pt]
+    \large Version 2.0.0
+}
+\author{}
+\date{\today}
+
+\begin{document}
+
+% --- Title page ---
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+
+{\Huge \textbf{X-CAVATE}}\\[12pt]
+{\LARGE GUI User Guide}\\[20pt]
+{\large Version 2.0.0}\\[40pt]
+
+{\large Convert vascular network geometries into collision-free\\[4pt]
+3D printer toolhead pathways and G-code.}
+
+\vspace{2cm}
+
+{\normalsize
+\textbf{SM} = Single-Material \quad|\quad \textbf{MM} = Multimaterial
+}
+
+\vfill
+
+{\normalsize \today}
+
+\end{titlepage}
+
+% --- Table of Contents ---
+\tableofcontents
+\newpage
+
+% ===================================================================
+\section{Getting Started}
+% ===================================================================
+
+X-CAVATE provides a web-based GUI built with Streamlit. It requires no coding
+experience to operate. This section covers installation and launching the
+interface.
+
+\subsection{Installation}
+
+\subsubsection{Option A: Conda (Recommended)}
+
+\begin{enumerate}[leftmargin=*]
+    \item Open a terminal (Mac: Terminal.app; Windows: Anaconda Prompt or PowerShell).
+    \item Confirm conda is installed:
+    \begin{lstlisting}
+conda --version
+    \end{lstlisting}
+    If not installed, download Miniconda from \url{https://docs.conda.io/en/latest/miniconda.html}.
+    \item Clone the repository and enter the directory:
+    \begin{lstlisting}
+git clone https://github.com/sohams-MASS/X-CAVATE.git
+cd X-CAVATE
+    \end{lstlisting}
+    \item Create and activate the conda environment:
+    \begin{lstlisting}
+conda env create -f environment.yml
+conda activate xcavate-gui
+    \end{lstlisting}
+    \item Verify the installation:
+    \begin{lstlisting}
+xcavate --help
+    \end{lstlisting}
+\end{enumerate}
+
+\subsubsection{Option B: pip}
+
+\begin{enumerate}[leftmargin=*]
+    \item Confirm Python 3.9+ is installed: \code{python3 -{}-version}
+    \item Clone the repository (same as above).
+    \item Install with GUI support:
+    \begin{lstlisting}
+pip install ".[gui]"
+    \end{lstlisting}
+    For CLI-only usage (no web interface): \code{pip install .}
+\end{enumerate}
+
+\subsubsection{Option C: Docker}
+
+\begin{enumerate}[leftmargin=*]
+    \item Install Docker Desktop from \url{https://www.docker.com/products/docker-desktop}.
+    \item Build the image:
+    \begin{lstlisting}
+docker build -t xcavate .
+    \end{lstlisting}
+    \item Run the container:
+    \begin{lstlisting}
+docker run -p 8501:8501 xcavate
+    \end{lstlisting}
+    \item Open \url{http://localhost:8501} in your browser.
+\end{enumerate}
+
+\subsection{Launching the GUI}
+
+After installation (conda or pip), start the server:
+
+\begin{lstlisting}
+conda activate xcavate-gui      # if using conda
+streamlit run xcavate/gui/app.py
+\end{lstlisting}
+
+A browser window opens automatically at \textbf{http://localhost:8501}. If it
+does not open, navigate to that URL manually.
+
+\begin{tipbox}
+To stop the server, press \code{Ctrl+C} in the terminal.
+\end{tipbox}
+
+\subsection{Dependencies}
+
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Package} & \textbf{Version} & \textbf{Purpose} \\
+\midrule
+numpy       & $\geq$ 1.21 & Array operations \\
+pandas      & $\geq$ 1.3  & Data handling \\
+scipy       & $\geq$ 1.7  & KD-tree spatial indexing, interpolation \\
+plotly      & $\geq$ 5.0  & Interactive 3D visualization \\
+matplotlib  & $\geq$ 3.5  & Static plots \\
+streamlit   & $\geq$ 1.20 & Web GUI (optional with pip; included in conda env) \\
+\bottomrule
+\end{tabularx}
+
+% ===================================================================
+\section{GUI Overview}
+\label{sec:overview}
+% ===================================================================
+
+The X-CAVATE GUI uses a two-panel layout:
+
+\begin{description}[style=nextline]
+    \item[\gui{Sidebar} (left panel)]
+    File upload widgets and all configurable parameters in expandable sections.
+    \item[\gui{Main area} (right panel)]
+    Top-level tabs containing the pipeline controls, results, custom G-code
+    editor, print instructions, and calibration validation.
+\end{description}
+
+\subsection{Abbreviations}
+
+Throughout the interface:
+\begin{itemize}[nosep]
+    \item \textbf{SM} = Single-Material
+    \item \textbf{MM} = Multimaterial
+\end{itemize}
+
+\subsection{Tab Structure}
+
+The main area contains up to four tabs (the second appears only when
+the Custom G-code toggle is enabled):
+
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Tab} & \textbf{Description} \\
+\midrule
+\gui{Pipeline}               & Run button, 7-step progress bar, 3D visualizations, download buttons \\
+\gui{Custom G-code}          & Tabbed template editor for header, extrusion, pressure, and dwell G-code snippets (visible only when enabled) \\
+\gui{Print Instructions}     & Step-by-step positioning and printing guidance for SM and MM modes \\
+\gui{Calibration Validation} & Upload calibration data to validate print accuracy against targets \\
+\bottomrule
+\end{tabularx}
+
+% ===================================================================
+\section{Sidebar: Input Files}
+\label{sec:input-files}
+% ===================================================================
+
+The top of the sidebar contains two file uploaders:
+
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Widget} & \textbf{Accepted type} & \textbf{Description} \\
+\midrule
+\gui{Network file} & \code{.txt} & Vascular network coordinates exported from SimVascular. Each vessel has a header line followed by coordinate rows (x, y, z in cm, plus optional radius and arterial/venous flag columns). \\
+\gui{Inlet / Outlet file} & \code{.txt} & Text file identifying inlet and outlet node coordinates. Each section starts with the keyword \code{inlet} or \code{outlet}, followed by (x, y, z) triplets. \\
+\bottomrule
+\end{tabularx}
+
+\begin{warnbox}
+Both files must be uploaded before the \btn{Run X-CAVATE} button becomes active.
+Coordinates in the network file must be in \textbf{centimeters} --- X-CAVATE
+converts to millimeters internally.
+\end{warnbox}
+
+\subsection{Network File Format}
+
+\begin{lstlisting}
+Vessel: 0, Number of Points: 100
+33.4878, 0.0000, 53.5303, 0.0200
+33.4115, -0.5285, 52.7311, 0.0200
+...
+Vessel: 1, Number of Points: 100
+15.0600, -37.3300, 11.6600, 0.0190
+...
+\end{lstlisting}
+
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Column} & \textbf{Required} & \textbf{Description} \\
+\midrule
+1--3 & Yes & x, y, z coordinates (cm) \\
+4    & No  & Vessel radius (needed for speed calculation) \\
+5    & No  & Arterial/venous flag: 0 = venous, nonzero = arterial (needed for multimaterial) \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Inlet / Outlet File Format}
+
+\begin{lstlisting}
+inlet
+21.97, -15.43, 50.00
+11.81, 0.00, 21.34
+outlet
+36.05, -27.19, 50.00
+50.00, 0.00, 26.54
+\end{lstlisting}
+
+Coordinates are matched to the nearest network point automatically.
+
+% ===================================================================
+\section{Sidebar: Required Parameters}
+\label{sec:required-params}
+% ===================================================================
+
+These parameters appear directly below the file uploaders and must be set for
+every run.
+
+\begin{longtable}{L{3cm} l l L{6.5cm}}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+\gui{Nozzle diameter} (mm) & float & 0.5 & Outer diameter of the print nozzle. \\
+\gui{Container height} (mm) & float & 10.0 & Height of the print container. \\
+\gui{Decimal places} & int & 3 & Number of decimal places for output coordinate rounding. \\
+\gui{Amount up} (mm) & float & 10.0 & Distance to raise the nozzle above the container between passes. \\
+\gui{Printer type} & select & Pressure & Hardware target: Pressure (pneumatic extrusion), Positive Ink (displacement pump), or Aerotech (6-axis motion controller). \\
+\gui{Multimaterial} & toggle & Off & Enable two-nozzle arterial/venous printing. Requires a 5-column input file (x, y, z, radius, arterial/venous flag). \\
+\bottomrule
+\end{longtable}
+
+% ===================================================================
+\section{Sidebar: Optional Parameters}
+\label{sec:optional-params}
+% ===================================================================
+
+Optional parameters are organized into seven expandable sections. Click a
+section header to reveal or hide its contents.
+
+% --- 5.1 Tolerancing ---
+\subsection{Tolerancing}
+
+\begin{tabularx}{\textwidth}{L{3.2cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Enable tolerance} & toggle & Off & When on, nodes within the tolerance distance are allowed in the same pass even if one geometrically blocks the other. \\
+\gui{Tolerance} & float & 0.0 & Tolerance distance (mm). 0 means none. \\
+\bottomrule
+\end{tabularx}
+
+% --- 5.2 Print Settings ---
+\subsection{Print Settings}
+
+\begin{tabularx}{\textwidth}{L{3.2cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Print speed} (mm/s) & float & 1.0 & Nozzle travel speed during extrusion. Typical range: 0.5--5.0 mm/s. \\
+\gui{Flow} (mm\textsuperscript{3}/s) & float & 0.161 & Volumetric flow rate for speed calculation mode. \\
+\gui{Jog speed} (mm/s) & float & 5.0 & Speed for rapid non-printing travel moves between passes. \\
+\gui{Jog speed lift} (mm/s) & float & 0.25 & Speed for the vertical lift at the end of each pass. \\
+\gui{Initial lift} (mm) & float & 0.5 & Height the nozzle lifts after finishing a pass before traveling. \\
+\gui{Dwell start} (s) & float & 0.08 & Pause after starting extrusion before nozzle movement. \textit{Aerotech only.} \\
+\gui{Dwell end} (s) & float & 0.08 & Pause after nozzle stops before extrusion off. \textit{Aerotech only.} \\
+\bottomrule
+\end{tabularx}
+
+\begin{infobox}
+The \gui{Dwell start} and \gui{Dwell end} fields only appear when
+the printer type is set to \textbf{Aerotech}.
+\end{infobox}
+
+% --- 5.3 Geometry ---
+\subsection{Geometry}
+
+\begin{tabularx}{\textwidth}{L{3.2cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Container X} (mm) & float & 50.0 & Width of the print container. Used for centering instructions. \\
+\gui{Container Y} (mm) & float & 50.0 & Depth of the print container. Used for centering instructions. \\
+\gui{Scale factor} & float & 1.0 & Multiplier applied to all coordinates after unit conversion. \\
+\gui{Top padding} (mm) & float & 0.0 & Extra clearance above the highest network point for safe nozzle retraction. \\
+\bottomrule
+\end{tabularx}
+
+% --- 5.4 Downsampling ---
+\subsection{Downsampling}
+
+\begin{tabularx}{\textwidth}{L{3.2cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Enable downsampling} & toggle & Off & Reduce point density to speed up printing. Branchpoints and endpoints are preserved. \\
+\gui{Downsample factor} & int & 1 & Factor by which to downsample the network. \\
+\bottomrule
+\end{tabularx}
+
+% --- 5.5 Multimaterial ---
+\subsection{Multimaterial}
+
+These settings are relevant when the \gui{Multimaterial} toggle is enabled.
+
+\begin{tabularx}{\textwidth}{L{3.2cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Offset X} (mm) & float & 103.0 & Horizontal distance between the two printheads. \\
+\gui{Offset Y} (mm) & float & 0.5 & Vertical fine-tuning offset between printheads. \\
+\gui{Front nozzle} & int & 1 & 1 = venous nozzle in front, 2 = venous nozzle behind. \\
+\gui{Printhead 1 name} & text & Aa & Axis designation for the arterial printhead in G-code. \\
+\gui{Printhead 2 name} & text & Ab & Axis designation for the venous printhead in G-code. \\
+\gui{Axis 1 name} & text & A & Z-axis letter for the arterial printhead. \\
+\gui{Axis 2 name} & text & B & Z-axis letter for the venous printhead. \\
+\gui{Jog translation} (mm/s) & float & 10.0 & Speed for travel moves between nozzles during printhead switching. \\
+\gui{Resting pressure} (psi) & float & 0.0 & Pressure applied to the inactive printhead. \\
+\gui{Active pressure} (psi) & float & 5.0 & Pressure applied to the active printhead during extrusion. \\
+\bottomrule
+\end{tabularx}
+
+% --- 5.6 Positive Ink Displacement ---
+\subsection{Positive Ink Displacement}
+
+\begin{tabularx}{\textwidth}{L{3.5cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Use radii} & toggle & Off & Use per-node vessel radii instead of a fixed diameter. \\
+\gui{Diameter} (mm) & float & 1.0 & Fixed vessel diameter for extrusion calculations. \\
+\gui{Syringe diameter} (mm) & float & 1.0 & Inner diameter of the syringe barrel. \\
+\gui{Factor} & float & 1.0 & Scaling multiplier for computed extrusion amounts. \\
+\gui{Separate arterial/venous} & toggle & Off & Set different start/end displacements per material. \\
+\bottomrule
+\end{tabularx}
+
+When \gui{Separate arterial/venous} is \textbf{off}, two fields appear:
+
+\begin{tabularx}{\textwidth}{L{3.5cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Start} (mm) & float & 0.0 & Plunger displacement at the start of each pass to prime ink flow. \\
+\gui{End} (mm) & float & 0.0 & Plunger displacement at the end of each pass (negative retracts). \\
+\bottomrule
+\end{tabularx}
+
+When \gui{Separate arterial/venous} is \textbf{on}, four fields appear instead:
+
+\begin{tabularx}{\textwidth}{L{3.5cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Start (arterial)} & float & 0.0 & Plunger displacement for the arterial syringe at pass start. \\
+\gui{Start (venous)} & float & 0.0 & Plunger displacement for the venous syringe at pass start. \\
+\gui{End (arterial)} & float & 0.0 & Plunger displacement for the arterial syringe at pass end. \\
+\gui{End (venous)} & float & 0.0 & Plunger displacement for the venous syringe at pass end. \\
+\bottomrule
+\end{tabularx}
+
+% --- 5.7 Advanced ---
+\subsection{Advanced}
+
+\begin{tabularx}{\textwidth}{L{3.5cm} l l X}
+\toprule
+\textbf{Parameter} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\gui{Custom G-code} & toggle & Off & Enable to provide custom G-code templates (reveals the Custom G-code tab). \\
+\gui{Pathfinding algorithm} & select & DFS & DFS: thorough collision detection via depth-first search. Sweep Line: faster bottom-up approach for large networks. \\
+\gui{Overlap nodes} & int & 0 & Number of nodes to retrace at pass boundaries to bridge small gaps. \\
+\gui{Overlap algorithm} & select & Retrace & ``Retrace'' scans all previous passes (original). ``Consecutive'' checks adjacent pairs (faster). \\
+\gui{Generate plots} & toggle & On & Create interactive 3D HTML visualizations. \\
+\gui{Speed calculation} & toggle & Off & Compute per-node print speed from vessel radius and flow rate. \\
+\gui{Gap closure (SM)} & toggle & Off & Load gap extension files for SM prints. When on, shows file uploaders for pass indices and deltas. \\
+\gui{Gap closure (MM)} & toggle & Off & Load gap extension files for MM prints. When on, shows file uploaders for pass indices and deltas. \\
+\bottomrule
+\end{tabularx}
+
+% ===================================================================
+\section{Pipeline Tab}
+\label{sec:pipeline}
+% ===================================================================
+
+The \gui{Pipeline} tab is the primary workspace where you run the X-CAVATE
+pipeline and view results.
+
+\subsection{Running the Pipeline}
+
+\begin{enumerate}[leftmargin=*]
+    \item Upload both input files in the sidebar.
+    \item Configure required and optional parameters.
+    \item Click \btn{Run X-CAVATE} (full-width primary button at the top of the tab).
+\end{enumerate}
+
+\begin{infobox}
+The run button is disabled until both input files are uploaded.
+\end{infobox}
+
+\subsection{Progress Bar}
+
+The pipeline executes in 7 steps. A progress bar tracks each step:
+
+\begin{tabularx}{\textwidth}{c X}
+\toprule
+\textbf{Step} & \textbf{Description} \\
+\midrule
+1 & Reading network and inlet/outlet files \\
+2 & Interpolating network to nozzle resolution \\
+3 & Building adjacency graph and detecting branchpoints \\
+4 & Generating collision-free print passes \\
+5 & Post-processing: subdivision, gap closure, overlap \\
+6 & Processing multimaterial passes \\
+7 & Writing output files and G-code \\
+\bottomrule
+\end{tabularx}
+
+Upon completion, a success message appears: ``X-CAVATE finished successfully.''
+
+\subsection{3D Visualizations}
+
+If \gui{Generate plots} is enabled, three interactive 3D Plotly charts are
+displayed below the progress bar:
+
+\begin{enumerate}[leftmargin=*]
+    \item \textbf{Original Network} --- The raw vascular network before processing, with each vessel shown as a separate trace.
+    \item \textbf{Single Material Print Passes} --- The computed collision-free SM print paths, color-coded by pass index.
+    \item \textbf{Multimaterial Print Passes} --- (If multimaterial is enabled) MM paths color-coded by material type (arterial vs.\ venous).
+\end{enumerate}
+
+All plots are interactive: rotate by clicking and dragging, zoom with the scroll
+wheel, and hover over traces for coordinate information.
+
+\subsection{Download Results}
+
+Below the visualizations, three download columns appear:
+
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Column} & \textbf{Contents} \\
+\midrule
+\textbf{G-code} & Download buttons for each generated G-code file (e.g., \code{gcode\_SM\_pressure.txt}, \code{gcode\_MM\_pressure.txt}). \\
+\textbf{Coordinate Files} & Download buttons for SM/MM coordinate files (x, y, z, combined). \\
+\textbf{Changelog} & Download button for \code{changelog.txt} (gap closure operations log). \\
+\bottomrule
+\end{tabularx}
+
+\begin{tipbox}
+Results persist in the browser session. You can switch to other tabs and return to download files later without re-running the pipeline.
+\end{tipbox}
+
+% ===================================================================
+\section{Custom G-code Tab}
+\label{sec:custom-gcode}
+% ===================================================================
+
+This tab appears only when the \gui{Custom G-code} toggle is enabled in the
+sidebar's Advanced section. It provides a tabbed editor for entering
+printer-specific G-code snippets that replace the default commands in the
+final output file.
+
+\subsection{Sub-tabs}
+
+The Custom G-code tab contains four sub-tabs:
+
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Sub-tab} & \textbf{What to paste} \\
+\midrule
+\gui{Header} & Printer initialization code: pressure box connections, homing commands, etc. \\
+\gui{Single Material} & Start/stop extrusion code for single-nozzle prints (2 fields, side-by-side). \\
+\gui{Multimaterial} & Start/stop extrusion + active/resting pressure for each printhead (8 fields in a 2-column layout). \\
+\gui{Dwell} & Optional time-delay code for ``spot welding'' at pass junctions (2 fields: start-of-pass and end-of-pass). \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Template Fields}
+
+The table below maps every editable text area to the output template file it
+replaces:
+
+\begin{longtable}{L{4.5cm} L{5.5cm} l}
+\toprule
+\textbf{GUI Label} & \textbf{Output Filename} & \textbf{Sub-tab} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{GUI Label} & \textbf{Output Filename} & \textbf{Sub-tab} \\
+\midrule
+\endhead
+Header code & \code{header\_code.txt} & Header \\
+Start extrusion & \code{start\_extrusion\_code.txt} & Single Material \\
+Stop extrusion & \code{stop\_extrusion\_code.txt} & Single Material \\
+Start extrusion --- Printhead 1 & \code{start\_extrusion\_code\_printhead1.txt} & Multimaterial \\
+Start extrusion --- Printhead 2 & \code{start\_extrusion\_code\_printhead2.txt} & Multimaterial \\
+Stop extrusion --- Printhead 1 & \code{stop\_extrusion\_code\_printhead1.txt} & Multimaterial \\
+Stop extrusion --- Printhead 2 & \code{stop\_extrusion\_code\_printhead2.txt} & Multimaterial \\
+Active pressure --- Printhead 1 & \code{active\_pressure\_printhead1.txt} & Multimaterial \\
+Active pressure --- Printhead 2 & \code{active\_pressure\_printhead2.txt} & Multimaterial \\
+Resting pressure --- Printhead 1 & \code{rest\_pressure\_printhead1.txt} & Multimaterial \\
+Resting pressure --- Printhead 2 & \code{rest\_pressure\_printhead2.txt} & Multimaterial \\
+Dwell code (start of pass) & \code{dwell\_start.txt} & Dwell \\
+Dwell code (end of pass) & \code{dwell\_end.txt} & Dwell \\
+\bottomrule
+\end{longtable}
+
+\begin{tipbox}
+Snippets are saved automatically in the browser session and persist across
+page re-runs, even when the Custom G-code toggle is temporarily turned off.
+\end{tipbox}
+
+% ===================================================================
+\section{Print Instructions Tab}
+\label{sec:instructions}
+% ===================================================================
+
+After a successful pipeline run, the \gui{Print Instructions} tab shows
+positioning and printing guidance specific to your network and parameters.
+
+\subsection{Start Position Metrics}
+
+Three metric cards display the starting coordinates:
+
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Metric} & \textbf{Description} \\
+\midrule
+\gui{Start X} (mm) & X-coordinate where the nozzle should begin. \\
+\gui{Start Y} (mm) & Y-coordinate where the nozzle should begin. \\
+\gui{Start Z} (mm) & Z-coordinate where the nozzle should begin. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Padding Metrics}
+
+Four metric cards show the container padding --- how far the network is offset
+from each container wall:
+
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Metric} & \textbf{Description} \\
+\midrule
+\gui{Left padding} & Distance (mm) from the network to the left container wall. \\
+\gui{Right padding} & Distance (mm) from the network to the right container wall. \\
+\gui{Front padding} & Distance (mm) from the network to the front container wall. \\
+\gui{Back padding} & Distance (mm) from the network to the back container wall. \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Printing Instructions}
+
+Depending on the mode, one of the following expandable sections appears:
+
+\begin{description}[style=nextline]
+    \item[\gui{Single Material Instructions}]
+    Step-by-step instructions for positioning the single printhead and starting
+    the print job.
+    \item[\gui{Multimaterial Calibration}]
+    Instructions for calibrating the offset between the two printheads.
+    \item[\gui{Multimaterial Positioning}]
+    Instructions for positioning both printheads and starting the multimaterial
+    print job.
+\end{description}
+
+\begin{infobox}
+This tab shows ``Run the pipeline first to see print instructions'' until you
+have completed a successful pipeline run.
+\end{infobox}
+
+% ===================================================================
+\section{Calibration Tab}
+\label{sec:calibration}
+% ===================================================================
+
+The \gui{Calibration} tab provides two features: computing the volumetric flow
+rate~($Q$) from calibration measurements and validating measured filament
+diameters against target values.
+
+\subsection{Compute Volumetric Flow Rate (Q)}
+
+This section calculates the average volumetric flow rate from calibration
+filament measurements and produces a calibration curve (radius vs.\ speed).
+
+\subsubsection{Inputs}
+
+\begin{tabularx}{\textwidth}{L{3.5cm} l X}
+\toprule
+\textbf{Widget} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\gui{Upload measured diameters CSV} & file upload & CSV file with a \code{Length} column containing measured filament diameters in \textbf{microns}. \\
+\gui{Print speed used during calibration} & float (default: 1.0) & The print speed in mm/s at which the calibration filaments were printed. \\
+\gui{Target diameters} & text input & Comma-separated list of expected filament diameters in \textbf{mm}, in the same order as the measurements. \\
+\gui{Measurements per target} & int (default: 3) & Number of rows in the CSV to average for each target diameter. \\
+\bottomrule
+\end{tabularx}
+
+\subsubsection{Running Q Computation}
+
+Click \btn{Compute Q} to process. The button is disabled until a CSV file is
+uploaded.
+
+\subsubsection{Outputs}
+
+Upon completion, the section displays:
+
+\begin{enumerate}[leftmargin=*]
+    \item The computed $Q$ value as a metric (mm\textsuperscript{3}/s).
+    \item An interactive Plotly chart showing the calibration curve (radius vs.\ speed).
+    \item Download buttons for:
+    \begin{itemize}[nosep]
+        \item \textbf{Q\_pressure.txt} --- the computed $Q$ value.
+        \item \textbf{radii\_pressure.html} --- interactive calibration curve.
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Calibration Validation}
+
+This section lets you compare measured filament diameters against target values
+to verify print accuracy.
+
+\subsubsection{Inputs}
+
+\begin{tabularx}{\textwidth}{L{3.5cm} l X}
+\toprule
+\textbf{Widget} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\gui{Upload measured diameters CSV} & file upload & CSV file with a \code{Length} column containing measured filament diameters in \textbf{microns}. \\
+\gui{Target diameters} & text input & Comma-separated list of expected filament diameters in \textbf{mm}, in the same order as the measurements. \\
+\gui{Measurements per target} & int (default: 3) & Number of rows in the CSV to average for each target diameter. \\
+\bottomrule
+\end{tabularx}
+
+\subsubsection{Running Validation}
+
+Click \btn{Run Validation} to process. The button is disabled until a CSV file
+is uploaded.
+
+\subsubsection{Outputs}
+
+Upon completion, the section displays:
+
+\begin{enumerate}[leftmargin=*]
+    \item An interactive Plotly chart comparing target vs.\ measured diameters.
+    \item Download buttons for:
+    \begin{itemize}[nosep]
+        \item \textbf{CSV report} (\code{calibration\_error.csv}) --- tabular error analysis.
+        \item \textbf{HTML report} (\code{calibration\_error.html}) --- interactive visualization.
+    \end{itemize}
+\end{enumerate}
+
+% ===================================================================
+\section{Output Files}
+\label{sec:outputs}
+% ===================================================================
+
+All output is written to a temporary directory. Use the download buttons in the
+\gui{Pipeline} tab to save files locally. When running via CLI, files are
+written to the \code{outputs/} directory (or the path specified by
+\code{-{}-output\_dir}).
+
+\subsection{Directory Structure}
+
+\begin{lstlisting}
+outputs/
+  graph/
+    graph.txt               # Adjacency graph
+    special_nodes.txt       # Branchpoints, endpoints, inlets, outlets
+    SM_x_coords.txt         # Single-material x coordinates per pass
+    SM_y_coords.txt         # Single-material y coordinates per pass
+    SM_z_coords.txt         # Single-material z coordinates per pass
+    SM_combined.txt         # Combined xyz per pass
+    MM_x_coords.txt         # Multimaterial x coordinates (if enabled)
+    MM_y_coords.txt         # Multimaterial y coordinates (if enabled)
+    MM_z_coords.txt         # Multimaterial z coordinates (if enabled)
+    MM_combined.txt         # Multimaterial combined xyz (if enabled)
+  gcode/
+    gcode_SM_pressure.txt   # Single-material G-code
+    gcode_MM_pressure.txt   # Multimaterial G-code (if enabled)
+  plots/
+    network_original.html   # 3D plot of original network
+    network_SM.html         # 3D plot of SM print passes
+    network_MM.html         # 3D plot of MM print passes (if enabled)
+  changelog.txt             # Gap closure operations log
+\end{lstlisting}
+
+\begin{infobox}
+The G-code filename suffix matches your selected printer type:
+\code{pressure}, \code{positive\_ink}, or \code{aerotech}.
+\end{infobox}
+
+\subsection{File Descriptions}
+
+\begin{longtable}{L{4cm} L{2cm} X}
+\toprule
+\textbf{File} & \textbf{Directory} & \textbf{Description} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{File} & \textbf{Directory} & \textbf{Description} \\
+\midrule
+\endhead
+\code{graph.txt} & \code{graph/} & Full adjacency graph of the interpolated network. \\
+\code{special\_nodes.txt} & \code{graph/} & Identified branchpoints, endpoints, inlets, and outlets. \\
+\code{SM\_x\_coords.txt} & \code{graph/} & X-coordinates for each SM print pass, one pass per line. \\
+\code{SM\_y\_coords.txt} & \code{graph/} & Y-coordinates for each SM print pass. \\
+\code{SM\_z\_coords.txt} & \code{graph/} & Z-coordinates for each SM print pass. \\
+\code{SM\_combined.txt} & \code{graph/} & Combined (x, y, z) coordinates per SM pass. \\
+\code{MM\_*.txt} & \code{graph/} & Multimaterial equivalents of the above (if enabled). \\
+\code{gcode\_SM\_*.txt} & \code{gcode/} & Single-material G-code for the selected printer type. \\
+\code{gcode\_MM\_*.txt} & \code{gcode/} & Multimaterial G-code (if enabled). \\
+\code{network\_original.html} & \code{plots/} & Interactive 3D visualization of the original vascular network. \\
+\code{network\_SM.html} & \code{plots/} & Interactive 3D visualization of SM print passes. \\
+\code{network\_MM.html} & \code{plots/} & Interactive 3D visualization of MM print passes. \\
+\code{changelog.txt} & root & Log of all gap closure operations performed. \\
+\bottomrule
+\end{longtable}
+
+% ===================================================================
+\section{Troubleshooting}
+\label{sec:troubleshooting}
+% ===================================================================
+
+\begin{longtable}{L{4.5cm} X}
+\toprule
+\textbf{Problem} & \textbf{Solution} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Problem} & \textbf{Solution} \\
+\midrule
+\endhead
+\code{Runtime instance already exists} (GUI) &
+A stale Streamlit process is running. Kill it with \code{pkill -f streamlit}, then restart the server. \\
+\midrule
+Inlet/outlet matching warnings &
+Inlet/outlet coordinates are approximate. X-CAVATE matches to the nearest network point and logs the distance. Verify the matches are reasonable. \\
+\midrule
+Pipeline hangs on large networks &
+Reduce coordinates per vessel to 100 or fewer, or enable downsampling. The Sweep Line algorithm may also be faster for very large networks. \\
+\midrule
+\code{ModuleNotFoundError} &
+Run \code{pip install ".[gui]"} to install all dependencies, or recreate the conda environment. \\
+\midrule
+Docker container won't start &
+Ensure Docker Desktop is running and port 8501 is not in use by another process. \\
+\midrule
+Download buttons disappear after clicking &
+Update to the latest version of X-CAVATE (this has been fixed). \\
+\midrule
+No G-code files generated &
+Verify that both input files are correctly formatted and that the pipeline completed without errors. Check the terminal for error messages. \\
+\midrule
+Plots not showing &
+Ensure \gui{Generate plots} is enabled in the Advanced section. If disabled, plots are skipped for faster execution. \\
+\midrule
+Browser does not open &
+Navigate manually to \code{http://localhost:8501}. On remote servers, ensure port 8501 is forwarded. \\
+\bottomrule
+\end{longtable}
+
+\end{document}

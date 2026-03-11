@@ -589,7 +589,7 @@ for _key in _CUSTOM_GCODE_FIELDS:
 tab_names = ["Pipeline"]
 if custom_gcode:
     tab_names.append("Custom G-code")
-tab_names += ["Print Instructions", "Calibration Validation"]
+tab_names += ["Print Instructions", "Calibration"]
 
 tabs = st.tabs(tab_names)
 idx = 0
@@ -1002,10 +1002,95 @@ with instr_tab:
         st.info("Run the pipeline first to see print instructions.")
 
 # ---------------------------------------------------------------------------
-# Calibration Validation tab
+# Calibration tab
 # ---------------------------------------------------------------------------
 
 with cal_tab:
+
+    # --- Compute Q section ---------------------------------------------------
+    st.subheader("Compute Volumetric Flow Rate (Q)")
+
+    q_csv_upload = st.file_uploader(
+        "Upload measured diameters CSV",
+        type=["csv"],
+        help="CSV file with a 'Length' column containing measured filament diameters in microns.",
+        key="q_csv_upload",
+    )
+
+    q_print_speed = st.number_input(
+        "Print speed used during calibration (mm/s)",
+        value=1.0,
+        min_value=0.001,
+        step=0.1,
+        format="%.3f",
+        help="The print speed in mm/s at which the calibration filaments were printed.",
+    )
+
+    q_targets_str = st.text_input(
+        "Target diameters (comma-separated, mm)",
+        value="0.4, 0.375, 0.35, 0.325, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1, 0.075",
+        help="Comma-separated list of expected filament diameters in mm, in the same order as the measurements.",
+        key="q_targets_str",
+    )
+
+    q_measurements_per = st.number_input(
+        "Measurements per target",
+        value=3,
+        min_value=1,
+        step=1,
+        help="Number of rows in the CSV to average for each target diameter.",
+        key="q_measurements_per",
+    )
+
+    q_run = st.button("Compute Q", disabled=(q_csv_upload is None))
+
+    if q_run and q_csv_upload is not None:
+        try:
+            q_target_diameters = [float(x.strip()) for x in q_targets_str.split(",")]
+            q_csv_bytes = q_csv_upload.getvalue()
+
+            from xcavate.core.calibration import compute_flow_rate
+
+            q_result = compute_flow_rate(
+                target_diameters=q_target_diameters,
+                measured_csv_bytes=q_csv_bytes,
+                print_speed=q_print_speed,
+                measurements_per_target=q_measurements_per,
+            )
+
+            st.session_state.q_result = q_result
+        except Exception as exc:
+            st.error(f"Q computation failed: {exc}")
+            st.exception(exc)
+
+    if "q_result" in st.session_state and st.session_state.q_result is not None:
+        q_result = st.session_state.q_result
+
+        st.metric("Computed Q (mm\u00b3/s)", f"{q_result['q_value']:.6f}")
+        st.plotly_chart(q_result["figure"], use_container_width=True)
+
+        q_dl_cols = st.columns(2)
+        with q_dl_cols[0]:
+            st.download_button(
+                label="Download Q_pressure.txt",
+                data=q_result["q_txt_bytes"],
+                file_name="Q_pressure.txt",
+                mime="text/plain",
+                key="dl_q_txt",
+            )
+        with q_dl_cols[1]:
+            st.download_button(
+                label="Download radii_pressure.html",
+                data=q_result["html_bytes"],
+                file_name="radii_pressure.html",
+                mime="text/html",
+                key="dl_q_html",
+            )
+
+    st.divider()
+
+    # --- Validation section --------------------------------------------------
+    st.subheader("Calibration Validation")
     st.caption(
         "Compare target filament diameters against measured values from a CSV. "
         "The CSV must have a column named **Length** with measurements in microns."
@@ -1015,12 +1100,14 @@ with cal_tab:
         "Upload measured diameters CSV",
         type=["csv"],
         help="CSV file with a 'Length' column containing measured filament diameters in microns.",
+        key="cal_csv_upload",
     )
 
     cal_targets_str = st.text_input(
         "Target diameters (comma-separated, mm)",
         value="0.4, 0.375, 0.35, 0.325, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1, 0.075",
         help="Comma-separated list of expected filament diameters in mm, in the same order as the measurements.",
+        key="cal_targets_str",
     )
 
     cal_measurements_per = st.number_input(
@@ -1029,6 +1116,7 @@ with cal_tab:
         min_value=1,
         step=1,
         help="Number of rows in the CSV to average for each target diameter.",
+        key="cal_measurements_per",
     )
 
     cal_run = st.button("Run Validation", disabled=(cal_csv_upload is None))
