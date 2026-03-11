@@ -116,10 +116,14 @@ with st.sidebar:
         "Printer type",
         options=list(_printer_labels.keys()),
         index=0,
+        help="Hardware target: Pressure (pneumatic extrusion), Positive Ink (displacement pump), or Aerotech (6-axis motion controller).",
     )
     printer_type = _printer_labels[printer_label]
 
-    multimaterial = st.toggle("Multimaterial", value=False)
+    multimaterial = st.toggle(
+        "Multimaterial", value=False,
+        help="Enable two-nozzle arterial/venous printing. Requires a 5-column input file (x, y, z, radius, artven flag).",
+    )
 
     # ------------------------------------------------------------------
     # Optional parameter sections (expandable)
@@ -130,7 +134,10 @@ with st.sidebar:
 
     # -- Tolerancing --
     with st.expander("Tolerancing"):
-        tolerance_flag = st.toggle("Enable tolerance", value=False)
+        tolerance_flag = st.toggle(
+            "Enable tolerance", value=False,
+            help="When enabled, nodes within the tolerance distance are allowed in the same pass even if one geometrically blocks the other.",
+        )
         tolerance = st.number_input(
             "Tolerance",
             min_value=0.0,
@@ -148,6 +155,7 @@ with st.sidebar:
             value=1.0,
             step=0.1,
             format="%.3f",
+            help="Nozzle travel speed during extrusion. Typical range: 0.5–5.0 mm/s depending on ink viscosity.",
         )
         flow = st.number_input(
             "Flow (mm^3/s)",
@@ -155,6 +163,7 @@ with st.sidebar:
             value=0.1609429886081009,
             step=0.001,
             format="%.16f",
+            help="Volumetric flow rate used for speed calculation mode. Also used to compute per-node print speed when 'Speed calculation' is on.",
         )
         jog_speed = st.number_input(
             "Jog speed (mm/s)",
@@ -162,6 +171,7 @@ with st.sidebar:
             value=5.0,
             step=0.5,
             format="%.2f",
+            help="Speed for rapid non-printing travel moves between passes.",
         )
         jog_speed_lift = st.number_input(
             "Jog speed lift (mm/s)",
@@ -169,6 +179,7 @@ with st.sidebar:
             value=0.25,
             step=0.01,
             format="%.2f",
+            help="Speed for the gentle vertical lift at the end of each pass before rapid retraction.",
         )
         initial_lift = st.number_input(
             "Initial lift (mm)",
@@ -176,6 +187,7 @@ with st.sidebar:
             value=0.5,
             step=0.1,
             format="%.2f",
+            help="Height the nozzle lifts after finishing a pass before traveling to the next one.",
         )
         if printer_type == PrinterType.AEROTECH:
             dwell_start = st.number_input(
@@ -184,6 +196,7 @@ with st.sidebar:
                 value=0.08,
                 step=0.01,
                 format="%.3f",
+                help="Pause duration (seconds) after starting extrusion, before the nozzle begins moving. Allows pressure to stabilize.",
             )
             dwell_end = st.number_input(
                 "Dwell end (s)",
@@ -191,6 +204,7 @@ with st.sidebar:
                 value=0.08,
                 step=0.01,
                 format="%.3f",
+                help="Pause duration (seconds) after the nozzle stops moving, before extrusion is turned off. Allows pressure bleed-off.",
             )
         else:
             dwell_start = 0.08
@@ -200,20 +214,27 @@ with st.sidebar:
     with st.expander("Geometry"):
         container_x = st.number_input(
             "Container X (mm)", min_value=0.0, value=50.0, step=1.0, format="%.1f",
+            help="Width of the print container (mm). Used to calculate centering instructions for the operator.",
         )
         container_y = st.number_input(
             "Container Y (mm)", min_value=0.0, value=50.0, step=1.0, format="%.1f",
+            help="Depth of the print container (mm). Used to calculate centering instructions for the operator.",
         )
         scale_factor = st.number_input(
             "Scale factor", min_value=0.001, value=1.0, step=0.1, format="%.3f",
+            help="Multiplier applied to all coordinates after unit conversion. Use 1.0 for no scaling.",
         )
         top_padding = st.number_input(
             "Top padding (mm)", min_value=0.0, value=0.0, step=0.5, format="%.1f",
+            help="Extra clearance (mm) added above the highest network point for safe nozzle retraction moves.",
         )
 
     # -- Downsampling --
     with st.expander("Downsampling"):
-        downsample = st.toggle("Enable downsampling", value=False)
+        downsample = st.toggle(
+            "Enable downsampling", value=False,
+            help="Reduce point density to speed up printing. Branchpoints and endpoints are always preserved.",
+        )
         downsample_factor = st.number_input(
             "Downsample factor",
             min_value=1,
@@ -226,9 +247,11 @@ with st.sidebar:
     with st.expander("Multimaterial"):
         offset_x = st.number_input(
             "Offset X (mm)", min_value=0.0, value=103.0, step=1.0, format="%.1f",
+            help="Horizontal distance (mm) between the two printheads. Measured by positioning both nozzles on the same calibration point.",
         )
         offset_y = st.number_input(
             "Offset Y (mm)", value=0.5, step=0.1, format="%.1f",
+            help="Vertical fine-tuning offset (mm) between the two printheads.",
         )
         front_nozzle = st.number_input(
             "Front nozzle",
@@ -238,15 +261,29 @@ with st.sidebar:
             step=1,
             help="1 = venous nozzle in front, 2 = venous nozzle behind.",
         )
-        printhead_1 = st.text_input("Printhead 1 name", value="Aa")
-        printhead_2 = st.text_input("Printhead 2 name", value="Ab")
-        axis_1 = st.text_input("Axis 1 name", value="A")
-        axis_2 = st.text_input("Axis 2 name", value="B")
+        printhead_1 = st.text_input(
+            "Printhead 1 name", value="Aa",
+            help="Axis designation for the arterial printhead in G-code commands (e.g. 'Aa').",
+        )
+        printhead_2 = st.text_input(
+            "Printhead 2 name", value="Ab",
+            help="Axis designation for the venous printhead in G-code commands (e.g. 'Ab').",
+        )
+        axis_1 = st.text_input(
+            "Axis 1 name", value="A",
+            help="Z-axis letter for the arterial printhead (e.g. 'A'). Must match the motion controller configuration.",
+        )
+        axis_2 = st.text_input(
+            "Axis 2 name", value="B",
+            help="Z-axis letter for the venous printhead (e.g. 'B'). Must match the motion controller configuration.",
+        )
         resting_pressure = st.number_input(
             "Resting pressure (psi)", min_value=0.0, value=0.0, step=0.5, format="%.1f",
+            help="Pneumatic pressure (psi) applied to the inactive printhead during multimaterial printing.",
         )
         active_pressure = st.number_input(
             "Active pressure (psi)", min_value=0.0, value=5.0, step=0.5, format="%.1f",
+            help="Pneumatic pressure (psi) applied to the active printhead during extrusion.",
         )
 
     # -- Positive Ink Displacement --
@@ -333,10 +370,12 @@ with st.sidebar:
             "Pathfinding algorithm",
             options=list(_algo_labels.keys()),
             index=0,
+            help="DFS: thorough collision detection via depth-first search. Sweep Line: faster bottom-up approach for large networks.",
         )
         algorithm = _algo_labels[algo_label]
         num_overlap = st.number_input(
             "Overlap nodes", min_value=0, value=0, step=1,
+            help="Number of nodes to retrace at pass boundaries to bridge small gaps. Use 0 to disable.",
         )
         _overlap_algo_labels = {
             "Retrace (original)": OverlapAlgorithm.RETRACE,
@@ -350,8 +389,14 @@ with st.sidebar:
                  "'Consecutive' only checks adjacent pass pairs (faster).",
         )
         overlap_algorithm = _overlap_algo_labels[overlap_algo_label]
-        generate_plots = st.toggle("Generate plots", value=True)
-        speed_calc = st.toggle("Speed calculation", value=False)
+        generate_plots = st.toggle(
+            "Generate plots", value=True,
+            help="Create interactive 3D HTML visualizations of the network and print passes in the output folder.",
+        )
+        speed_calc = st.toggle(
+            "Speed calculation", value=False,
+            help="Compute per-node print speed from vessel radius and flow rate instead of using a fixed print speed.",
+        )
 
 
 # ---------------------------------------------------------------------------
