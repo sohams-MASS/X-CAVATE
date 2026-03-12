@@ -1,0 +1,1020 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{float}
+\usepackage{caption}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+% Colors
+\definecolor{codegreen}{rgb}{0.0,0.5,0.0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+\definecolor{accentblue}{rgb}{0.1,0.3,0.6}
+\definecolor{warnorange}{rgb}{0.85,0.45,0.0}
+\definecolor{successgreen}{rgb}{0.0,0.55,0.2}
+
+% Code style
+\lstdefinestyle{pythonstyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{accentblue}\bfseries,
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2,
+    frame=single,
+    rulecolor=\color{codegray},
+    language=Python,
+}
+\lstset{style=pythonstyle}
+
+% Header/Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{codegray}{X-CAVATE CTR Algorithms Reference}}
+\fancyhead[R]{\small\textcolor{codegray}{Confidential}}
+\fancyfoot[C]{\thepage}
+
+% Section formatting
+\titleformat{\section}{\Large\bfseries\color{accentblue}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{accentblue!80!black}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{accentblue!60!black}}{\thesubsubsection}{1em}{}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=accentblue,
+    urlcolor=accentblue,
+    citecolor=accentblue,
+}
+
+% Custom commands
+\newcommand{\Oh}[1]{$O(#1)$}
+\newcommand{\filename}[1]{\texttt{\textcolor{accentblue}{#1}}}
+\newcommand{\funcname}[1]{\texttt{\textcolor{codepurple}{#1}}}
+\newcommand{\param}[1]{\texttt{\textcolor{codegreen}{#1}}}
+
+\begin{document}
+
+% Title Page
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+
+{\Huge\bfseries\textcolor{accentblue}{X-CAVATE CTR}}\\[0.5cm]
+{\Large\textcolor{accentblue!70!black}{Algorithm Reference: Kinematics, Collision Detection,\\Pathfinding, and Workspace Optimization}}\\[2cm]
+
+{\large\textbf{Detailed Algorithm Specification}}\\[0.5cm]
+{\large Structure, Runtime Complexity, and Implementation}\\[2cm]
+
+\begin{tabular}{rl}
+\textbf{Date:} & March 12, 2026 \\
+\textbf{Author:} & Soham S. \\
+\textbf{Repository:} & \texttt{CTR-X-CAVATE-GIMBAL} \\
+\end{tabular}
+
+\vfill
+
+{\small\textcolor{codegray}{This document provides a comprehensive reference for every algorithm implemented in the CTR extension of the X-CAVATE vascular network printing platform, with formal runtime analysis, data structure specifications, and implementation details.}}
+
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{System Context: How Algorithms Relate to CTR X-CAVATE}
+% ============================================================================
+
+The X-CAVATE platform converts a 3D vascular network graph into G-code instructions for a bioprinter. The CTR (Concentric Tube Robot) extension replaces the straight-needle Cartesian printer with a two-tube flexible mechanism that reaches target nodes via tube translation and rotation.
+
+This introduces algorithmic challenges absent from straight-needle printing:
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item \textbf{Inverse Kinematics (IK):} Given a target point in 3D space, compute the actuator values $(z_\text{ss}, z_\text{ntnl}, \theta)$ that position the needle tip at that point.
+    \item \textbf{Forward Kinematics (FK):} Given actuator values, compute the 3D shape of the entire needle body (straight section + curved arc), needed for collision detection.
+    \item \textbf{Collision Detection:} Unlike a straight needle (which only occludes points directly below it), the curved CTR body sweeps through a volume. Both \emph{shaft collisions} (hitting unprinted nodes) and \emph{body-drag collisions} (disturbing already-printed material) must be checked.
+    \item \textbf{Workspace Optimization:} The CTR has limited reach. The base position and insertion direction must be optimized to maximize the reachable fraction of the network.
+    \item \textbf{Gimbal Expansion:} A mechanical gimbal tilts the insertion direction within a cone, expanding the reachable workspace. The pathfinder must try multiple gimbal orientations per node.
+    \item \textbf{Print Ordering:} The order in which nodes are visited determines which body-drag collisions occur. A conflict graph encodes precedence constraints, and cycle-breaking heuristics produce near-optimal orderings.
+\end{enumerate}
+
+\noindent The algorithms are organized into six modules, each described in its own section below.
+
+\begin{table}[H]
+\centering
+\caption{Algorithm Module Map}
+\begin{tabular}{llp{5.5cm}}
+\toprule
+\textbf{Module} & \textbf{File} & \textbf{Core Algorithms} \\
+\midrule
+Kinematics & \filename{ctr\_kinematics.py} & Rodrigues rotation, IK, FK, batch reachability \\
+Collision Detection & \filename{ctr\_collision.py} & KD-tree body queries, shaft/drag checks \\
+Gimbal Solver & \filename{gimbal\_solver.py} & Multi-config search, solution recording \\
+Swept Volume Ordering & \filename{swept\_volume.py} & Conflict graph construction, Eades GreedyFAS \\
+Base Placement & \filename{ctr\_placement.py} & Spherical shell sampling, batch evaluation \\
+Pathfinding & \filename{pathfinding.py} & Iterative DFS variants, angular sector partitioning \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Algorithm 1: Rodrigues Rotation}
+\label{sec:rodrigues}
+% ============================================================================
+
+\subsection{Purpose}
+
+Rodrigues' rotation formula is the foundational primitive used throughout the CTR system. It computes a $3 \times 3$ rotation matrix $\mathbf{R}$ that rotates any vector by angle $\theta$ about a unit axis $\hat{k}$.
+
+\subsection{Mathematical Formulation}
+
+Given unit axis $\hat{k} = (k_x, k_y, k_z)$ and angle $\theta$:
+
+\[
+\mathbf{K} = \begin{bmatrix} 0 & -k_z & k_y \\ k_z & 0 & -k_x \\ -k_y & k_x & 0 \end{bmatrix}
+\]
+
+\[
+\mathbf{R}(\theta, \hat{k}) = \mathbf{I}_3 + \sin(\theta)\,\mathbf{K} + (1 - \cos\theta)\,\mathbf{K}^2
+\]
+
+\subsection{Usage in the CTR System}
+
+\begin{table}[H]
+\centering
+\caption{Rodrigues Rotation Usage Across Modules}
+\begin{tabular}{lp{7cm}}
+\toprule
+\textbf{Caller} & \textbf{Purpose} \\
+\midrule
+\funcname{CTRConfig.\_\_post\_init\_\_()} & Precompute direction matrix $\mathbf{D}$ for fast IK \\
+\funcname{global\_to\_local()} & Build local coordinate frame from $(\hat{R}, \hat{n}, \theta_\text{match})$ \\
+\funcname{compute\_needle\_body()} & Compute bend direction for nitinol arc \\
+\funcname{make\_gimbal\_config()} & Tilt $\hat{R}$ by $(\alpha, \phi)$ for gimbal configs \\
+\funcname{compute\_gimbal\_frame()} & Visualization of tilted vs.\ untilted direction \\
+\funcname{build\_conflict\_graph()} & Vectorized bend direction for all nodes simultaneously \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Runtime and Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{Time:} \Oh{1} per rotation (fixed $3 \times 3$ matrix operations).
+    \item \textbf{Space:} \Oh{1} (one $3 \times 3$ matrix).
+    \item \textbf{File:} \filename{ctr\_kinematics.py}, line 147.
+    \item \textbf{Vectorized variant:} In \funcname{build\_conflict\_graph()}, the skew-symmetric matrix $\mathbf{K}$ is constructed once and applied to all $M$ nodes simultaneously via broadcasting: $\hat{d}_i = \hat{n} + \sin(a_i) \mathbf{K}\hat{n} + (1 - \cos a_i) \mathbf{K}^2\hat{n}$, achieving \Oh{M} total for $M$ nodes.
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 2: Inverse Kinematics (Global $\to$ SNT)}
+\label{sec:ik}
+% ============================================================================
+
+\subsection{Purpose}
+
+Given a target point $\mathbf{p} \in \mathbb{R}^3$ in the global (network) frame, compute actuator values $(z_\text{ss}, z_\text{ntnl}, \theta)$ that position the CTR needle tip at $\mathbf{p}$. Returns \texttt{None} if the point is outside the reachable workspace.
+
+\subsection{Algorithm}
+
+The IK pipeline has two stages:
+
+\subsubsection{Stage 1: Global to Local Transform}
+
+Transform the target point from the global frame to the CTR local frame using the precomputed direction matrix $\mathbf{D}$:
+
+\[
+\mathbf{D} = \begin{bmatrix} \hat{R} \\ \hat{n}_\text{rot} \\ \hat{t} \end{bmatrix}, \quad
+\hat{n}_\text{rot} = \mathbf{R}(\theta_\text{match}, \hat{R})\,\hat{n}, \quad
+\hat{t} = \hat{R} \times \hat{n}_\text{rot}
+\]
+
+\[
+\boldsymbol{\delta} = \mathbf{p} - \mathbf{X}, \quad
+(x_l, y_l, z_l)^T = \mathbf{D}\,\boldsymbol{\delta}
+\]
+
+\noindent where $\mathbf{X}$ is the CTR base position, $\hat{R}$ is the insertion direction, and $\hat{n}$ is the bending-plane normal.
+
+\subsubsection{Stage 2: Local to SNT (Actuator Values)}
+
+\begin{enumerate}[nosep]
+    \item \textbf{Rotation angle:} $\theta = \arctan2(z_l, y_l)$
+    \item \textbf{Perpendicular distance:} $r_\perp = \sqrt{y_l^2 + z_l^2}$
+    \item \textbf{Calibration bounds check:} If $r_\perp \notin [x_\text{val}[0], x_\text{val}[-1]]$, return \texttt{None}.
+    \item \textbf{Arc parameter:} $y_r = f_{x_r \to y_r}(r_\perp)$ \quad (interpolation lookup)
+    \item \textbf{Extension difference:} $\Delta = f_{y_r \to \text{ntnl-ss}}(y_r)$ \quad (interpolation lookup)
+    \item \textbf{Arc axial contribution:} $a = r \cdot \sin(y_r / r)$ if $y_r > 0$, else $0$
+    \item \textbf{SS extension:} $z_\text{ss} = x_l - a$
+    \item \textbf{Nitinol extension:} $z_\text{ntnl} = z_\text{ss} + \Delta$
+\end{enumerate}
+
+\subsection{Implementations}
+
+Three variants exist, optimized for different call patterns:
+
+\begin{table}[H]
+\centering
+\caption{IK Implementation Variants}
+\begin{tabular}{lllp{4.5cm}}
+\toprule
+\textbf{Function} & \textbf{Input} & \textbf{Runtime} & \textbf{Notes} \\
+\midrule
+\funcname{global\_to\_snt()} & 1 point & \Oh{1} & Uses \texttt{interp1d} objects; general purpose \\
+\funcname{fast\_global\_to\_snt()} & 1 point & \Oh{1} & Uses \texttt{np.interp} + precomputed $\mathbf{D}$; 3--5$\times$ faster \\
+\funcname{batch\_local\_to\_snt()} & $N$ points & \Oh{N} & Fully vectorized NumPy; amortizes interp overhead \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Default Calibration}
+
+When no calibration file is provided, a default analytical calibration based on circular-arc geometry is generated:
+\[
+x_r = r(1 - \cos\alpha), \quad y_r = r\alpha, \quad \Delta = y_r
+\]
+for $\alpha \in [0, \pi/2]$ sampled at 100 points. This assumes the nitinol tube traces a perfect circular arc with no material nonlinearities.
+
+\subsection{Implementation Details}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{ctr\_kinematics.py}, lines 171--285 (scalar), 320--432 (batch).
+    \item \textbf{Precomputation:} Direction matrix $\mathbf{D}$ and raw interpolation arrays are cached in \texttt{CTRConfig.\_\_post\_init\_\_()}, avoiding repeated Rodrigues computation.
+    \item \textbf{Fast path:} \funcname{fast\_global\_to\_snt()} uses Python \texttt{math} module for scalar operations and \texttt{np.interp} (which is $\sim 5\times$ faster than calling an \texttt{interp1d} object for a single point).
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 3: Forward Kinematics (Needle Body Computation)}
+\label{sec:fk}
+% ============================================================================
+
+\subsection{Purpose}
+
+Given actuator values $(z_\text{ss}, z_\text{ntnl}, \theta)$, compute the full 3D centerline of the CTR needle body as a sequence of sample points. This is essential for collision detection --- unlike a straight needle, the CTR body traces a curved path through space.
+
+\subsection{Algorithm}
+
+The needle body consists of two concatenated sections:
+
+\subsubsection{Section 1: Straight SS Tube}
+
+\[
+\mathbf{p}_\text{ss}(t) = \mathbf{X} + t \cdot \hat{R}, \quad t \in [0, z_\text{ss}]
+\]
+
+Sampled at $n_\text{ss}$ evenly spaced points. The sample count is adaptive:
+\[
+n_\text{ss} = \max\left(2, \left\lceil \frac{z_\text{ss}}{r \cdot \pi / (2 \cdot n_\text{arc})} \right\rceil + 1\right)
+\]
+This ensures the SS sampling density approximately matches the arc sampling density.
+
+\subsubsection{Section 2: Pre-Curved Nitinol Arc}
+
+If $z_\text{ntnl} > z_\text{ss}$ (nitinol extends beyond the SS tube):
+
+\begin{enumerate}[nosep]
+    \item Compute bend direction via simplified Rodrigues (exploiting $\hat{R} \perp \hat{n}$):
+    \[
+    \hat{d} = \hat{n} \cos(a) + (\hat{R} \times \hat{n}) \sin(a), \quad a = \theta_\text{match} + \theta
+    \]
+    \item Compute maximum arc angle: $\alpha_\text{max} = (z_\text{ntnl} - z_\text{ss}) / r$
+    \item Sample $n_\text{arc}$ points along the circular arc from the SS tip:
+    \[
+    \mathbf{p}_\text{arc}(\alpha) = \mathbf{X}_\text{ss\_tip} + r \sin(\alpha)\,\hat{R} + r(1 - \cos\alpha)\,\hat{d}
+    \]
+    for $\alpha \in \{1, 2, \ldots, n_\text{arc}\} \cdot \alpha_\text{max} / n_\text{arc}$.
+\end{enumerate}
+
+\subsection{Vectorized Variant (Conflict Graph)}
+
+In \funcname{build\_conflict\_graph()}, the FK is computed for all $M$ reachable nodes simultaneously:
+
+\begin{itemize}[nosep]
+    \item All SS sections: $\mathbf{P}_\text{ss} \in \mathbb{R}^{M \times n_\text{ss} \times 3}$ via broadcasting.
+    \item All arc sections: $\mathbf{P}_\text{arc} \in \mathbb{R}^{M \times n_\text{arc} \times 3}$ via broadcasting.
+    \item Total body array: $\mathbf{P}_\text{all} \in \mathbb{R}^{M \times (n_\text{ss} + n_\text{arc}) \times 3}$.
+\end{itemize}
+
+\subsection{Runtime}
+
+\begin{table}[H]
+\centering
+\caption{FK Runtime Complexity}
+\begin{tabular}{lll}
+\toprule
+\textbf{Variant} & \textbf{Time} & \textbf{Space} \\
+\midrule
+Scalar (\funcname{compute\_needle\_body}) & \Oh{n_\text{ss} + n_\text{arc}} & \Oh{n_\text{ss} + n_\text{arc}} \\
+Vectorized (conflict graph) & \Oh{M \cdot (n_\text{ss} + n_\text{arc})} & \Oh{M \cdot (n_\text{ss} + n_\text{arc})} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent With default parameters ($n_\text{ss} = 12$, $n_\text{arc} = 20$), each body has 32 sample points. For $M = 18{,}681$ nodes, the vectorized body array is $18{,}681 \times 32 \times 3 = 1{,}793{,}376$ float64 values ($\approx 14$\,MB).
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{Scalar:} \filename{ctr\_kinematics.py}, line 476, function \funcname{compute\_needle\_body()}.
+    \item \textbf{Vectorized:} \filename{swept\_volume.py}, lines 117--165 (inline in \funcname{build\_conflict\_graph()}).
+    \item \textbf{Key optimization:} The cross product $\hat{K}_n = \hat{R} \times \hat{n}$ is precomputed in \texttt{CTRConfig.\_\_post\_init\_\_()} and reused for all FK calls on the same config.
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 4: CTR Collision Detection}
+\label{sec:collision}
+% ============================================================================
+
+\subsection{Purpose}
+
+Determine whether printing a candidate node $v$ is safe given the current state of visited and unvisited nodes. Unlike straight-needle collision detection (which uses a 2D XY shadow), CTR collision requires checking the full 3D curved needle body against all nearby nodes.
+
+\subsection{Data Structures}
+
+\begin{table}[H]
+\centering
+\caption{Collision Detector State}
+\begin{tabular}{llp{6cm}}
+\toprule
+\textbf{Structure} & \textbf{Type} & \textbf{Purpose} \\
+\midrule
+\texttt{\_unvisited} & \texttt{Set[int]} & Nodes not yet printed \\
+\texttt{\_visited} & \texttt{Set[int]} & Already-printed nodes \\
+\texttt{\_unvisited\_tree} & \texttt{cKDTree} & Spatial index over unvisited node positions \\
+\texttt{\_visited\_tree} & \texttt{cKDTree} & Spatial index over visited node positions \\
+\texttt{\_graph} & \texttt{Dict[int, List[int]]} & Adjacency list for neighbor exemption \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Algorithm: \funcname{is\_valid(node)}}
+
+\begin{algorithm}[H]
+\caption{CTR Collision Validity Check}
+\begin{algorithmic}[1]
+\Require node $v$, unvisited set $U$, KD-trees $T_U, T_V$, graph $G$
+\If{$v \notin U$} \Return \textbf{false} \EndIf
+\State $(z_\text{ss}, z_\text{ntnl}, \theta) \gets$ \Call{fast\_global\_to\_snt}{$v$}
+\If{SNT out of actuator limits} \Return \textbf{false} \EndIf
+\State $B \gets$ \Call{compute\_needle\_body}{$z_\text{ss}, z_\text{ntnl}, \theta$} \Comment{$|B| = n_\text{ss} + n_\text{arc}$}
+\State $\mathbf{p}_v \gets$ coordinates of $v$
+\State $B_\text{far} \gets \{b \in B : \|b - \mathbf{p}_v\|^2 \geq r_\text{tip}^2\}$ \Comment{Tip exclusion}
+\State $N_v \gets G[v]$ \Comment{Graph neighbors of $v$}
+\ForAll{$b \in B_\text{far}$} \Comment{\textbf{Shaft collision check}}
+    \State $\text{hits} \gets T_U.\text{query\_ball\_point}(b, r_\text{nozzle})$
+    \ForAll{$u \in \text{hits}$}
+        \If{$u \neq v$ \textbf{and} $u \in U$ \textbf{and} $u \notin N_v$} \Return \textbf{false} \EndIf
+    \EndFor
+\EndFor
+\ForAll{$b \in B_\text{far}$} \Comment{\textbf{Body-drag check}}
+    \If{$T_V.\text{query\_ball\_point}(b, r_\text{nozzle}) \neq \emptyset$} \Return \textbf{false} \EndIf
+\EndFor
+\Return \textbf{true}
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Collision Rules}
+
+\begin{enumerate}[nosep]
+    \item \textbf{Tip proximity exclusion:} Body points within $3 \times r_\text{nozzle}$ of the target node are not checked. This prevents adjacent interpolated nodes (spaced at $\sim r_\text{nozzle}$) from falsely blocking the candidate.
+
+    \item \textbf{Shaft collision (unvisited):} Any unvisited non-neighbor node within $r_\text{nozzle}$ of a non-tip body point blocks the candidate. The needle shaft would displace that node's gel before it is printed.
+
+    \item \textbf{Body-drag (visited):} Any visited node within $r_\text{nozzle}$ of a non-tip body point blocks the candidate. The needle would drag through already-printed gel.
+
+    \item \textbf{Graph-neighbor exemption:} Direct graph neighbors of the candidate are exempt from shaft checks. These nodes are reachable from the candidate and may be printed in the same DFS pass.
+\end{enumerate}
+
+\subsection{KD-Tree Maintenance}
+
+Both trees are rebuilt periodically (every \param{rebuild\_interval} = 500 mark\_visited calls) to keep query performance optimal as nodes move between sets.
+
+\begin{lstlisting}
+def _rebuild_trees(self):
+    uv_idx = np.array(sorted(self._unvisited), dtype=np.intp)
+    self._unvisited_tree = cKDTree(self._points[uv_idx])
+    v_idx = np.array(sorted(self._visited), dtype=np.intp)
+    self._visited_tree = cKDTree(self._points[v_idx])
+\end{lstlisting}
+
+\subsection{Runtime Analysis}
+
+Let $N$ = total nodes, $B$ = body sample points per node ($\sim$32), $k$ = average KD-tree query hits.
+
+\begin{table}[H]
+\centering
+\caption{Collision Detection Runtime}
+\begin{tabular}{ll}
+\toprule
+\textbf{Operation} & \textbf{Cost} \\
+\midrule
+IK (fast scalar) & \Oh{1} \\
+FK (body computation) & \Oh{B} \\
+Tip exclusion filter & \Oh{B} \\
+Shaft check (batch KD-tree query) & \Oh{B \cdot \log N} expected \\
+Body-drag check (batch KD-tree query) & \Oh{B \cdot \log N} expected \\
+KD-tree rebuild (amortized) & \Oh{N \log N / R} per call, where $R$ = rebuild interval \\
+\midrule
+\textbf{Total per \funcname{is\_valid()} call} & \Oh{B \cdot (\log N + k)} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{ctr\_collision.py}, class \texttt{CTRCollisionDetector} (242 lines).
+    \item \textbf{Key optimization:} Uses \funcname{query\_ball\_point} with \texttt{return\_length=True} for the body-drag check, avoiding full hit-list construction when only existence matters.
+    \item \textbf{Batch mode:} The shaft check uses \funcname{query\_ball\_point(far\_body, collision\_r)} on the entire body array at once (SciPy internally parallelizes this).
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 5: Gimbal Solver with Config Tracking}
+\label{sec:gimbal}
+% ============================================================================
+
+\subsection{Purpose}
+
+Extend the collision detector to try multiple gimbal orientations per node, recording which orientation succeeded so that the G-code writer can emit the correct actuator commands.
+
+\subsection{Gimbal Configuration Space}
+
+The gimbal tilts the insertion direction $\hat{R}$ by angle $\alpha$ at azimuth $\phi$ within a cone:
+
+\begin{itemize}[nosep]
+    \item Cone half-angle: $\alpha_\text{max}$ (default $15^\circ$)
+    \item Tilt levels: $n_\text{tilt}$ (default 3) at $\alpha = \{5^\circ, 10^\circ, 15^\circ\}$
+    \item Azimuth samples: $n_\text{az}$ (default 8) at $\phi = \{0^\circ, 45^\circ, \ldots, 315^\circ\}$
+    \item Total configs: $1 + n_\text{tilt} \times n_\text{az} = 25$ (including the untilted base)
+\end{itemize}
+
+Each config is a full \texttt{CTRConfig} with a tilted $\hat{R}'$ computed via Rodrigues rotation:
+
+\[
+\hat{k}_\text{tilt} = \cos(\phi)\,\hat{n} + \sin(\phi)\,\hat{b}, \quad
+\hat{R}' = \mathbf{R}(\alpha, \hat{k}_\text{tilt})\,\hat{R}
+\]
+
+where $\hat{b} = \hat{R} \times \hat{n}$.
+
+\subsection{Algorithm: \funcname{GimbalSolverDetector.is\_valid(node)}}
+
+\begin{algorithm}[H]
+\caption{Gimbal Solver Validity Check}
+\begin{algorithmic}[1]
+\Require node $v$, configs $C_0, C_1, \ldots, C_{24}$, active config index $a$
+\State $\text{valid\_configs} \gets []$
+\State $\text{order} \gets [a] + [0, 1, \ldots, 24] \setminus \{a\}$ \Comment{Try active config first}
+\ForAll{$i \in \text{order}$}
+    \State $(z_\text{ss}, z_\text{ntnl}, \theta) \gets$ \Call{fast\_global\_to\_snt}{$v, C_i$}
+    \If{unreachable or out of limits} \textbf{continue} \EndIf
+    \State $B \gets$ \Call{compute\_needle\_body}{$z_\text{ss}, z_\text{ntnl}, \theta, C_i$}
+    \If{\Call{shaft\_and\_drag\_ok}{$v, B$}}
+        \State $\text{valid\_configs}.\text{append}(i)$
+        \If{$i = a$} \textbf{break} \Comment{Active config works --- short-circuit}
+        \EndIf
+    \EndIf
+\EndFor
+\State cache valid\_configs for \funcname{mark\_visited()}
+\Return $|\text{valid\_configs}| > 0$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Config Selection Strategy}
+
+When \funcname{mark\_visited(node)} is called:
+\begin{enumerate}[nosep]
+    \item If the active config $a$ is in the valid list, choose it (promotes \textbf{gimbal continuity} --- minimizes retract/reorient cycles in the G-code).
+    \item Otherwise, choose the first valid config.
+    \item Update the active config index to the chosen config.
+    \item Store a \texttt{GimbalNodeSolution} recording $(i, \alpha_i, \phi_i, z_\text{ss}, z_\text{ntnl}, \theta)$.
+\end{enumerate}
+
+\subsection{Runtime Analysis}
+
+Let $C$ = number of gimbal configs (25), $B$ = body points (32), $N$ = nodes.
+
+\begin{itemize}[nosep]
+    \item \textbf{Best case} (active config works): \Oh{B \cdot \log N} --- same as base detector.
+    \item \textbf{Worst case} (all configs tried): \Oh{C \cdot B \cdot \log N} = \Oh{25 \cdot 32 \cdot \log N}.
+    \item \textbf{Empirical:} With angular sector ordering, the active config succeeds $>85\%$ of the time, so the amortized cost approaches the best case.
+\end{itemize}
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{gimbal\_solver.py}, class \texttt{GimbalSolverDetector} (lines 77--253).
+    \item \textbf{Config precomputation:} All 25 \texttt{CTRConfig} objects are built once in \texttt{\_\_init\_\_} via \funcname{\_build\_gimbal\_configs()}.
+    \item \textbf{Solution storage:} \texttt{Dict[int, GimbalNodeSolution]} maps node index to solved values.
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 6: Swept-Volume Conflict Graph}
+\label{sec:conflict}
+% ============================================================================
+
+\subsection{Purpose}
+
+Build a directed graph where edge $i \to j$ means ``printing node $i$ requires the needle body to pass through node $j$'s location, so $i$ should be printed \emph{before} $j$.'' This graph encodes the precedence constraints that, if respected, eliminate body-drag collisions.
+
+\subsection{Algorithm}
+
+\begin{algorithm}[H]
+\caption{Conflict Graph Construction}
+\begin{algorithmic}[1]
+\Require points $P$, graph $G$, CTR config, nozzle radius $r$
+\State \textbf{Step 1:} Batch IK for all $N$ graph nodes $\to$ $(z_\text{ss}, z_\text{ntnl}, \theta)_i$ \Comment{\Oh{N}}
+\State Filter to $M$ reachable nodes
+\State \textbf{Step 2:} Vectorized FK for all $M$ nodes $\to$ body array $\in \mathbb{R}^{M \times B \times 3}$ \Comment{\Oh{MB}}
+\State \textbf{Step 3:} Compute tip exclusion mask $\in \{0,1\}^{M \times B}$ \Comment{\Oh{MB}}
+\State \textbf{Step 4:} Build single KD-tree over all $MB$ body points \Comment{\Oh{MB \log(MB)}}
+\State \textbf{Step 5:} For each graph node $j$, query KD-tree for body points within $r$ \Comment{\Oh{N \log(MB)}}
+\State \textbf{Step 6:} For each hit, map body point $\to$ source node $i$; add edge $i \to j$ if $j \notin G[i]$ \Comment{\Oh{E}}
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Runtime Analysis}
+
+\begin{table}[H]
+\centering
+\caption{Conflict Graph Construction Complexity}
+\begin{tabular}{lll}
+\toprule
+\textbf{Step} & \textbf{Time} & \textbf{Space} \\
+\midrule
+Batch IK & \Oh{N} & \Oh{N} \\
+Vectorized FK & \Oh{MB} & \Oh{MB} \\
+Tip exclusion & \Oh{MB} & \Oh{MB} \\
+KD-tree build & \Oh{MB \log(MB)} & \Oh{MB} \\
+KD-tree query (all nodes) & \Oh{N \log(MB) + H} & \Oh{H} \\
+Graph assembly & \Oh{H} & \Oh{E} \\
+\midrule
+\textbf{Total} & \Oh{MB \log(MB) + H} & \Oh{MB + E} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent where $M$ = reachable nodes, $B$ = body samples (32), $H$ = total KD-tree hits, $E$ = conflict edges.
+
+\textbf{Empirical:} For $M = 18{,}681$ nodes with $B = 32$: KD-tree over $\sim 600$K points, built in $\sim 0.3$s. Batch query with \texttt{workers=-1} (parallel) completes in $\sim 1.5$s. Total conflict graph construction: $< 3$s.
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{swept\_volume.py}, function \funcname{build\_conflict\_graph()} (lines 33--238).
+    \item \textbf{Body point $\to$ source node mapping:} \texttt{src\_node = valid\_nodes[hit\_idx // n\_body]}. This integer division maps each flat body-point index back to the node that generated it.
+    \item \textbf{Parallel queries:} \texttt{cKDTree.query\_ball\_point(..., workers=-1)} uses all CPU cores.
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 7: Eades GreedyFAS (Cycle Breaking)}
+\label{sec:eades}
+% ============================================================================
+
+\subsection{Purpose}
+
+The conflict graph typically contains cycles (mutual precedence constraints). To obtain a valid linear print ordering, cycles must be broken by removing a minimum set of back-edges. The Eades GreedyFAS algorithm provides a provably good approximation.
+
+\subsection{Theoretical Guarantee}
+
+The algorithm removes at least 50\% of back-edges in any directed graph, running in \Oh{m} time where $m$ is the edge count. This is the best known polynomial-time approximation for the NP-hard Feedback Arc Set problem.
+
+\subsection{Algorithm}
+
+\begin{algorithm}[H]
+\caption{Eades GreedyFAS Linear Ordering}
+\begin{algorithmic}[1]
+\Require Directed graph $G = (V, E)$
+\State Initialize output deques $S_L \gets \emptyset$, $S_R \gets \emptyset$
+\State Compute $\text{indeg}[v]$, $\text{outdeg}[v]$, $\delta[v] = \text{outdeg}[v] - \text{indeg}[v]$ for all $v$
+\While{$V \neq \emptyset$}
+    \Repeat
+        \While{$\exists$ sink $v$ with $\text{outdeg}[v] = 0$}
+            \State Remove $v$ from $G$; prepend $v$ to $S_L$
+        \EndWhile
+        \While{$\exists$ source $v$ with $\text{indeg}[v] = 0$}
+            \State Remove $v$ from $G$; append $v$ to $S_R$
+        \EndWhile
+    \Until{no sinks or sources found}
+    \If{$V \neq \emptyset$}
+        \State $v^* \gets \arg\max_{v \in V} \delta[v]$ \Comment{Max outdeg $-$ indeg}
+        \State Remove $v^*$ from $G$; append $v^*$ to $S_R$
+    \EndIf
+\EndWhile
+\State \Return $S_L \cdot S_R$ \Comment{Concatenation}
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Runtime Analysis}
+
+\begin{itemize}[nosep]
+    \item \textbf{Time:} \Oh{n + m} where $n = |V|$, $m = |E|$. Each node is processed exactly once; each edge is examined at most twice (once for degree update on each endpoint).
+    \item \textbf{Space:} \Oh{n + m} for adjacency lists, degree arrays, and bucket queues.
+\end{itemize}
+
+\subsection{Application in X-CAVATE}
+
+The Eades ordering is applied \emph{within each angular sector} (see Section~\ref{sec:angular_sector}). For a sector with $n_s$ nodes and $m_s$ intra-sector conflict edges, the cost is \Oh{n_s + m_s}.
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{swept\_volume.py}, function \funcname{eades\_greedy\_fas()} (lines 241--366).
+    \item \textbf{Bucket queues:} Nodes are organized by $\delta = \text{outdeg} - \text{indeg}$ in a \texttt{defaultdict(set)} for \Oh{1} access to the maximum-$\delta$ node.
+    \item \textbf{Reverse adjacency:} A reverse adjacency list (\texttt{rev}) enables efficient predecessor lookup during node removal.
+\end{itemize}
+
+\subsection{Reference}
+
+Eades, P., Lin, X., and Smyth, W.F. (1993). ``A fast and effective heuristic for the feedback arc set problem.'' \textit{Information Processing Letters}, 47(6):319--323.
+
+
+% ============================================================================
+\section{Algorithm 8: Angular Sector Partitioned DFS}
+\label{sec:angular_sector}
+% ============================================================================
+
+\subsection{Purpose}
+
+Organize the global print ordering by partitioning nodes into angular sectors based on their rotation angle $\theta$, then applying Eades ordering within each sector. This exploits the observation that the CTR bending plane sweeps through $360^\circ$, and nodes at similar $\theta$ can be printed with minimal gimbal reorientation.
+
+\subsection{Algorithm}
+
+\begin{algorithm}[H]
+\caption{Angular Sector Partitioned DFS}
+\begin{algorithmic}[1]
+\Require Graph $G$, points $P$, CTR config, $n_\text{sectors}$
+\State \textbf{Step 1:} Compute $\theta_i$ for all nodes via batch IK
+\State \textbf{Step 2:} Partition nodes into $n_\text{sectors}$ sectors by $\theta$:
+\[
+\text{sector}(i) = \left\lfloor \frac{\theta_i + \pi}{2\pi / n_\text{sectors}} \right\rfloor
+\]
+\State \textbf{Step 3:} Build global conflict graph $C$ via \funcname{build\_conflict\_graph}
+\ForAll{sector $s = 0, 1, \ldots, n_\text{sectors} - 1$}
+    \State Extract intra-sector conflict subgraph $C_s$
+    \State $\text{order}_s \gets$ \Call{eades\_greedy\_fas}{$C_s$}
+    \State Process nodes in Eades order via \funcname{iterative\_dfs\_gimbal}
+\EndFor
+\State \textbf{Cleanup:} Process any remaining unvisited nodes via z-heap DFS
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{DFS Variant: \funcname{iterative\_dfs\_gimbal()}}
+
+A modified DFS that promotes gimbal config continuity:
+
+\begin{enumerate}[nosep]
+    \item For the current node, collect unvisited neighbors from the graph.
+    \item Partition neighbors into two tiers:
+    \begin{itemize}[nosep]
+        \item \textbf{Tier 1:} Reachable with the detector's \emph{active} gimbal config (quick IK + bounds check).
+        \item \textbf{Tier 2:} All other unvisited neighbors.
+    \end{itemize}
+    \item Within each tier, sort by \texttt{conflict\_outdegree[node]} ascending (nodes that block fewer future nodes are visited first).
+    \item Push Tier 2 first, then Tier 1 onto the stack (LIFO ensures Tier 1 is processed first).
+\end{enumerate}
+
+This biases the DFS toward neighbors reachable without changing the gimbal orientation, reducing retract/reorient cycles in the physical mechanism.
+
+\subsection{Runtime Analysis}
+
+Let $N$ = total graph nodes, $S$ = number of sectors (default 8), $M$ = reachable nodes, $E$ = conflict edges.
+
+\begin{table}[H]
+\centering
+\caption{Angular Sector DFS Runtime}
+\begin{tabular}{lll}
+\toprule
+\textbf{Step} & \textbf{Time} & \textbf{Notes} \\
+\midrule
+Batch $\theta$ computation & \Oh{N} & Vectorized IK \\
+Sector partitioning & \Oh{N} & Array bin assignment \\
+Conflict graph & \Oh{MB \log(MB)} & See Section~\ref{sec:conflict} \\
+Per-sector Eades & $\sum_s$\Oh{n_s + m_s} = \Oh{N + E} & \\
+DFS passes & \Oh{N \cdot C \cdot B \cdot \log N} & $C$ gimbal configs per validity check \\
+\midrule
+\textbf{Total} & \Oh{MB\log(MB) + NCB\log N} & Dominated by DFS validity checks \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{gimbal\_solver.py}, function \funcname{\_run\_angular\_sector()} (lines 355--489).
+    \item \textbf{Sector assignment:} \texttt{k = int(np.clip((theta + pi) / sector\_width, 0, n\_sectors - 1))}.
+    \item \textbf{Cleanup sweep:} Handles nodes with undefined $\theta$ (unreachable from base config but reachable from a gimbal config) and any nodes not covered by sector processing.
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 9: Auto-Placement Optimization}
+\label{sec:placement}
+% ============================================================================
+
+\subsection{Purpose}
+
+Automatically determine the optimal CTR base position $\mathbf{X}$ and insertion direction $\hat{R}$ to maximize the fraction of network nodes reachable by the CTR workspace.
+
+\subsection{Algorithm}
+
+\begin{algorithm}[H]
+\caption{Spherical Shell Placement Optimization}
+\begin{algorithmic}[1]
+\Require Network points $P$, CTR parameters $(r, z_\text{ss,max}, z_\text{ntnl,max})$
+\State $\mathbf{c} \gets \text{mean}(P)$ \Comment{Network centroid}
+\State $r_\text{net} \gets \max_i \|P_i - \mathbf{c}\|$ \Comment{Bounding sphere radius}
+\State $d_\text{reach} \gets z_\text{ss,max} + r$ \Comment{Axial reach}
+\State Compute standoff distances $D = \text{linspace}(s_\text{min} \cdot r', s_\text{max} \cdot r', n_d)$
+\State $\text{best} \gets (-1, \mathbf{0}, \mathbf{0})$ \Comment{(count, position, orientation)}
+\ForAll{$d \in D$}
+    \ForAll{$\theta \in [-70^\circ, +70^\circ]$ sampled at $n_\text{el}$ points}
+        \ForAll{$\phi \in [0, 360^\circ)$ sampled at $n_\text{az}$ points}
+            \State $\hat{u} \gets (\cos\theta\cos\phi, \cos\theta\sin\phi, \sin\theta)$
+            \State $\mathbf{X} \gets \mathbf{c} + d \cdot \hat{u}$
+            \State $\hat{R} \gets (\mathbf{c} - \mathbf{X}) / \|\mathbf{c} - \mathbf{X}\|$ \Comment{Point toward centroid}
+            \State Build \texttt{CTRConfig} with $(\mathbf{X}, \hat{R}, r, z_\text{ss,max}, z_\text{ntnl,max})$
+            \State $\text{count} \gets \sum$ \Call{batch\_is\_reachable}{$P$}
+            \If{$\text{count} > \text{best.count}$}
+                \State $\text{best} \gets (\text{count}, \mathbf{X}, \hat{R})$
+            \EndIf
+        \EndFor
+    \EndFor
+\EndFor
+\State \Return best
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Search Space}
+
+\begin{itemize}[nosep]
+    \item \textbf{Azimuth:} 12 samples in $[0, 2\pi)$
+    \item \textbf{Elevation:} 7 samples in $[-70^\circ, +70^\circ]$ (avoid degenerate pole orientations)
+    \item \textbf{Distances:} 4 standoff multipliers in $[1.2 \cdot d'/2, 2.5 \cdot d']$ where $d' = r_\text{net} + d_\text{reach}/2$
+    \item \textbf{Total candidates:} $12 \times 7 \times 4 = 336$
+\end{itemize}
+
+\subsection{Runtime Analysis}
+
+Let $K$ = number of candidates (336), $N$ = network nodes.
+
+\begin{itemize}[nosep]
+    \item \textbf{Per candidate:} \texttt{batch\_is\_reachable} costs \Oh{N} (vectorized matrix multiply + interp + boolean mask).
+    \item \textbf{CTRConfig construction:} \Oh{1} (reuses pre-loaded calibration).
+    \item \textbf{Total:} \Oh{K \cdot N} = \Oh{336 \cdot N}.
+\end{itemize}
+
+\noindent For $N = 18{,}681$: $336 \times 18{,}681 \approx 6.3$M reachability checks, completing in $<2$ seconds.
+
+\subsection{Design Rationale}
+
+\begin{itemize}[nosep]
+    \item \textbf{Why spherical shell?} The CTR has a toroidal-like workspace centered on the insertion axis. The base must be at a ``Goldilocks'' distance: too close and the workspace doesn't enclose the network; too far and nodes exceed the maximum extension. The shell sampling covers the viable zone.
+    \item \textbf{Why $\hat{R}$ toward centroid?} This centers the toroidal workspace on the network, empirically maximizing coverage. Non-centroid-pointing orientations consistently perform worse.
+    \item \textbf{Why $\pm 70^\circ$ elevation?} Near-vertical placements ($> 70^\circ$) produce degenerate toroid orientations that cover thin slices of the network.
+\end{itemize}
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{ctr\_placement.py}, function \funcname{optimize\_ctr\_placement()} (174 lines).
+    \item \textbf{Calibration sharing:} \funcname{\_load\_calibration()} is called once before the candidate loop; all candidates reuse the same interpolation functions.
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 10: Gimbal Reachability Expansion}
+\label{sec:gimbal_reach}
+% ============================================================================
+
+\subsection{Purpose}
+
+Determine whether a node is reachable from \emph{any} gimbal configuration, not just the base. This is used during graph pruning to avoid removing nodes that are unreachable from the base but reachable from a tilted orientation.
+
+\subsection{Algorithm}
+
+\begin{lstlisting}
+def gimbal_reachable_nodes(points, graph_nodes, base_config,
+                           cone_angle_deg, n_tilt, n_azimuth):
+    configs = _build_gimbal_configs(base_config, cone_angle_deg,
+                                     n_tilt, n_azimuth)
+    combined = np.zeros(len(graph_nodes), dtype=bool)
+    for cfg in configs:
+        mask = batch_is_reachable(points[graph_nodes], cfg)
+        combined |= mask
+    return combined
+\end{lstlisting}
+
+\subsection{Runtime}
+
+\Oh{C \cdot N} where $C = 25$ configs and $N$ = number of graph nodes. Each \funcname{batch\_is\_reachable} call is \Oh{N} (vectorized). Total: $25N \approx 467$K operations for 18,681 nodes.
+
+\subsection{Impact}
+
+Without gimbal reachability expansion: 435/18,681 nodes pruned (2.3\%). With gimbal expansion (15$^\circ$ cone): 0 nodes pruned (100\% coverage). The gimbal tilts $\hat{R}$ enough to shift the workspace boundary past fringe nodes.
+
+
+% ============================================================================
+\section{Algorithm 11: Oracle Detector (Diagnostic)}
+\label{sec:oracle}
+% ============================================================================
+
+\subsection{Purpose}
+
+Establish a theoretical upper bound on the number of nodes printable per pass by disabling the body-drag check. If the production detector (with body-drag) approaches the oracle's performance, the ordering strategy is working well.
+
+\subsection{Variants}
+
+\begin{table}[H]
+\centering
+\caption{Detector Hierarchy}
+\begin{tabular}{llll}
+\toprule
+\textbf{Detector} & \textbf{Shaft?} & \textbf{Body-drag?} & \textbf{Gimbal?} \\
+\midrule
+\texttt{OracleDetector} & Yes & \textbf{No} & No \\
+\texttt{GimbalOracleDetector} & Yes & \textbf{No} & Yes \\
+\texttt{GimbalRealisticDetector} & Yes & Yes & Yes \\
+\texttt{GimbalSolverDetector} & Yes & Yes & Yes + recording \\
+\texttt{CTRCollisionDetector} & Yes & Yes & No \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{oracle.py}, classes \texttt{OracleDetector} (lines 38--98), \texttt{GimbalOracleDetector} (lines 191--275), \texttt{GimbalRealisticDetector} (lines 278--376).
+    \item All inherit from \texttt{CTRCollisionDetector}; the oracle variants simply skip the visited-tree query in \funcname{is\_valid()}.
+\end{itemize}
+
+
+% ============================================================================
+\section{Algorithm 12: Iterative DFS with Collision Checking}
+\label{sec:dfs}
+% ============================================================================
+
+\subsection{Purpose}
+
+Traverse the network graph depth-first, visiting collision-free nodes and recording the visit order as a single print pass. When the DFS stalls (no valid neighbors), a new pass is started from the next unvisited node.
+
+\subsection{Variants}
+
+Three DFS variants are implemented:
+
+\begin{table}[H]
+\centering
+\caption{DFS Variants}
+\begin{tabular}{lp{7cm}}
+\toprule
+\textbf{Function} & \textbf{Neighbor Ordering} \\
+\midrule
+\funcname{iterative\_dfs()} & Reverse sorted by node index (lowest first) \\
+\funcname{iterative\_dfs\_greedy()} & Ascending \texttt{conflict\_outdegree} (fewest future conflicts first) \\
+\funcname{iterative\_dfs\_gimbal()} & Two-tier: active-config-reachable first, then others; within tiers by conflict outdegree \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Core DFS Loop}
+
+\begin{algorithm}[H]
+\caption{Iterative DFS with Collision Checking}
+\begin{algorithmic}[1]
+\Require Graph $G$, start node $s$, detector $D$
+\State stack $\gets [s]$, pass\_list $\gets []$
+\While{stack $\neq \emptyset$}
+    \State $v \gets$ stack.pop()
+    \If{$D$.is\_visited($v$)} \textbf{continue} \EndIf
+    \If{not $D$.is\_valid($v$)} \textbf{continue} \EndIf
+    \State $D$.mark\_visited($v$)
+    \State pass\_list.append($v$)
+    \State $N_v \gets$ sorted unvisited neighbors of $v$ (ordering depends on variant)
+    \State Push $N_v$ onto stack in reverse order
+\EndWhile
+\State \Return pass\_list
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Runtime}
+
+Each node is popped from the stack at most once (visited check), so the DFS itself is \Oh{N + E_G} where $E_G$ = graph edges. However, each \funcname{is\_valid()} call costs \Oh{CB\log N} (see Section~\ref{sec:collision}), making the per-pass cost \Oh{|P| \cdot CB\log N} where $|P|$ = nodes in the pass.
+
+\subsection{Implementation}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{pathfinding.py}, lines 642--787.
+    \item \textbf{Why iterative?} The original recursive DFS hit Python's 1000-frame recursion limit on networks with $>$1000 nodes. The explicit stack has no depth limit.
+\end{itemize}
+
+
+% ============================================================================
+\section{Summary: Complete Runtime Table}
+\label{sec:summary}
+% ============================================================================
+
+\begin{longtable}{p{5cm}lp{5cm}}
+\caption{Complete Algorithm Runtime Summary} \\
+\toprule
+\textbf{Algorithm} & \textbf{Runtime} & \textbf{Empirical (18K nodes)} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Algorithm} & \textbf{Runtime} & \textbf{Empirical (18K nodes)} \\
+\midrule
+\endhead
+Rodrigues Rotation & \Oh{1} & $< 1\,\mu$s \\
+Scalar IK (\funcname{fast\_global\_to\_snt}) & \Oh{1} & $\sim 5\,\mu$s \\
+Batch IK (\funcname{batch\_local\_to\_snt}) & \Oh{N} & $\sim 2$\,ms \\
+Scalar FK (\funcname{compute\_needle\_body}) & \Oh{B} & $\sim 50\,\mu$s \\
+Vectorized FK (conflict graph) & \Oh{MB} & $\sim 100$\,ms \\
+Single collision check (\funcname{is\_valid}) & \Oh{CB\log N} & $\sim 200\,\mu$s (best), $\sim 5$\,ms (worst) \\
+Conflict graph construction & \Oh{MB\log(MB)} & $\sim 3$\,s \\
+Eades GreedyFAS & \Oh{n + m} & $< 100$\,ms \\
+Angular sector partitioning & \Oh{N} & $< 10$\,ms \\
+Auto-placement (336 candidates) & \Oh{K \cdot N} & $< 2$\,s \\
+Gimbal reachability (25 configs) & \Oh{C \cdot N} & $< 500$\,ms \\
+Full pipeline (all passes) & \Oh{NCB\log N} & $\sim 30$--60\,s \\
+\bottomrule
+\end{longtable}
+
+\noindent \textbf{Key:} $N$ = nodes, $M$ = reachable nodes, $B$ = body samples (32), $C$ = gimbal configs (25), $K$ = placement candidates (336), $E$ = conflict edges, $n, m$ = subgraph nodes/edges.
+
+% ============================================================================
+\section{Data Structure Reference}
+\label{sec:datastructures}
+% ============================================================================
+
+\begin{table}[H]
+\centering
+\caption{Core Data Structures}
+\begin{tabular}{llp{5.5cm}}
+\toprule
+\textbf{Structure} & \textbf{Type} & \textbf{Usage} \\
+\midrule
+\texttt{CTRConfig} & \texttt{dataclass} & All geometric/calibration params; precomputed $\mathbf{D}$, $\hat{K}_n$, raw interp arrays \\
+\texttt{GimbalNodeSolution} & \texttt{dataclass} & Per-node solution: $(i, \alpha, \phi, z_\text{ss}, z_\text{ntnl}, \theta)$ \\
+\texttt{cKDTree} & scipy spatial & $O(\log N)$ radius queries for collision detection \\
+\texttt{Graph} & \texttt{Dict[int, List[int]]} & Network adjacency list \\
+\texttt{conflict\_graph} & \texttt{Dict[int, Set[int]]} & Directed precedence constraints \\
+Flat body array & \texttt{ndarray (M*B, 3)} & All body points for KD-tree indexing \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% ============================================================================
+\section{Conclusion}
+% ============================================================================
+
+The CTR X-CAVATE extension implements 12 distinct algorithms organized into a pipeline that transforms a vascular network graph into collision-free, gimbal-aware print passes:
+
+\begin{enumerate}[nosep]
+    \item Rodrigues rotation provides the geometric primitive for all frame transforms.
+    \item Inverse kinematics maps 3D targets to actuator commands with scalar, fast-scalar, and batch variants optimized for different call patterns.
+    \item Forward kinematics computes the curved needle body, enabling full 3D collision envelopes.
+    \item KD-tree-accelerated collision detection handles shaft and body-drag checks in $O(B \log N)$ per node.
+    \item The gimbal solver tries up to 25 orientations per node with continuity-aware config selection.
+    \item The swept-volume conflict graph encodes ``must-print-before'' precedence constraints via vectorized body computation and a unified KD-tree over $\sim$600K body points.
+    \item Eades GreedyFAS breaks cycles in $O(m)$ with a proven 50\% back-edge removal guarantee.
+    \item Angular sector partitioning exploits the rotational structure of the CTR workspace for efficient ordering.
+    \item Auto-placement optimization finds the best base position from 336 candidates in $<2$ seconds.
+    \item Gimbal reachability expansion eliminates fringe-node pruning, achieving 100\% network coverage.
+\end{enumerate}
+
+Together, these algorithms enable the CTR to print all 18,681 nodes of a complex vascular network in 101 collision-free passes with zero pruned nodes and zero body-drag violations.
+
+\end{document}
