@@ -5,3 +5,9 @@ dist/
 build/
 .pytest_cache/
 *.egg
+.DS_Store
+outputs/
+outputs_baseline/
+outputs_optimized/
+outputs_refactored/
+.Rhistory

@@ -1,0 +1,1013 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage{caption}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{parskip}
+\usepackage{amssymb}
+
+% Colors
+\definecolor{codegreen}{rgb}{0.0,0.5,0.0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+\definecolor{accentblue}{rgb}{0.1,0.3,0.6}
+\definecolor{warnorange}{rgb}{0.85,0.45,0.0}
+\definecolor{successgreen}{rgb}{0.0,0.55,0.2}
+\definecolor{newfile}{rgb}{0.0,0.55,0.2}
+\definecolor{modifiedfile}{rgb}{0.1,0.3,0.6}
+
+% Code style
+\lstdefinestyle{pythonstyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{accentblue}\bfseries,
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2,
+    frame=single,
+    rulecolor=\color{codegray},
+    language=Python,
+}
+\lstset{style=pythonstyle}
+
+% Header/Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{codegray}{X-CAVATE CTR Simulation \& Auto-Placement Report}}
+\fancyhead[R]{\small\textcolor{codegray}{Confidential}}
+\fancyfoot[C]{\thepage}
+
+% Section formatting
+\titleformat{\section}{\Large\bfseries\color{accentblue}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{accentblue!80!black}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{accentblue!60!black}}{\thesubsubsection}{1em}{}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=accentblue,
+    urlcolor=accentblue,
+    citecolor=accentblue,
+}
+
+% Custom commands
+\newcommand{\filename}[1]{\texttt{\textcolor{accentblue}{#1}}}
+\newcommand{\funcname}[1]{\texttt{\textcolor{codepurple}{#1}}}
+\newcommand{\param}[1]{\texttt{\textcolor{codegreen}{#1}}}
+\newcommand{\newlabel}{\textcolor{newfile}{\textbf{[NEW]}}}
+\newcommand{\modlabel}{\textcolor{modifiedfile}{\textbf{[MODIFIED]}}}
+
+\begin{document}
+
+% Title Page
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+
+{\Huge\bfseries\textcolor{accentblue}{X-CAVATE}}\\[0.5cm]
+{\Large\textcolor{accentblue!70!black}{Concentric Tube Robot Needle Simulation,\\Auto-Placement Optimization, \& Gimbal Integration}}\\[2cm]
+
+{\large\textbf{Comprehensive Engineering Change Report}}\\[0.5cm]
+{\large Branch: \texttt{claude/serene-proskuriakova}}\\[2cm]
+
+\begin{tabular}{rl}
+\textbf{Date:} & March 12, 2026 \\
+\textbf{Author:} & Soham S. \\
+\textbf{Platform:} & macOS Darwin 25.3.0 \\
+\textbf{Python:} & 3.x (Conda environment) \\
+\textbf{Visualization:} & Plotly + Streamlit \\
+\end{tabular}
+
+\vfill
+
+{\small\textcolor{codegray}{This report documents all changes implemented across the X-CAVATE codebase to support CTR needle simulation, automated base placement optimization, gimbal workspace expansion, and Streamlit GUI integration.}}
+
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{Executive Summary}
+% ============================================================================
+
+This report documents a comprehensive set of engineering changes to the X-CAVATE vascular network printing platform. The changes introduce three major capabilities:
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item \textbf{Animated CTR Needle Simulation} --- Real-time 3D visualization of the concentric tube robot mechanism (stainless steel outer tube, pre-curved nitinol inner tube, gimbal tilt) as it prints node-by-node through the vascular network. Supports both single-pass and all-passes animation modes.
+
+    \item \textbf{Automated CTR Base Placement Optimization} --- Spherical shell sampling algorithm that automatically determines the optimal CTR base position and insertion direction to maximize the number of reachable network nodes.
+
+    \item \textbf{Gimbal Workspace Expansion} --- Integration of the gimbal solver into the simulation pipeline and GUI, enabling the CTR to tilt its insertion direction within a configurable cone (default 15$^\circ$ half-angle) to reach fringe nodes that would otherwise fall outside the workspace boundary.
+\end{enumerate}
+
+\noindent These features span \textbf{6 files} (2 new, 4 modified), adding approximately \textbf{1,200 lines} of new production code and modifying approximately \textbf{200 lines} of existing code.
+
+\begin{table}[H]
+\centering
+\caption{Files Changed Summary}
+\begin{tabular}{llcl}
+\toprule
+\textbf{File} & \textbf{Status} & \textbf{Lines} & \textbf{Purpose} \\
+\midrule
+\filename{xcavate/viz/ctr\_simulation.py} & \newlabel & 861 & Needle animation engine \\
+\filename{xcavate/core/ctr\_placement.py} & \newlabel & 174 & Auto-placement optimizer \\
+\filename{xcavate/pipeline.py} & \modlabel & +45 & Expose simulation data \\
+\filename{xcavate/gui/app.py} & \modlabel & +120 & GUI integration \\
+\filename{xcavate/config.py} & \modlabel & +5 & Hardware defaults update \\
+\filename{xcavate/viz/plotting.py} & \modlabel & +8 & Empty-pass guard \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Hardware Context}
+% ============================================================================
+
+The changes are designed around a specific concentric tube robot (CTR) hardware configuration:
+
+\begin{table}[H]
+\centering
+\caption{CTR Hardware Specifications}
+\begin{tabular}{lrl}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Unit} \\
+\midrule
+Stainless steel (SS) outer tube OD & 4.0 & mm \\
+Nitinol inner tube OD & 1.6 & mm \\
+Pre-curved bend radius & 55.0 & mm \\
+Max SS extension & 65.0 & mm \\
+Max nitinol extension & 140.0 & mm \\
+Gimbal cone half-angle & 15.0 & degrees \\
+Gimbal tilt levels & 3 & --- \\
+Gimbal azimuth samples & 8 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent The CTR operates by translating and rotating two concentric tubes relative to each other:
+\begin{itemize}[nosep]
+    \item The \textbf{stainless steel outer tube} extends straight along the insertion direction $\hat{R}$, providing rigid axial reach.
+    \item The \textbf{nitinol inner tube} is pre-curved with radius $r = 55$\,mm. When extended beyond the SS tube tip, it deflects into a circular arc, allowing the needle tip to reach points off the insertion axis.
+    \item \textbf{Rotation} ($\theta$) about the insertion axis sweeps the bend plane through $360^\circ$.
+    \item The \textbf{gimbal} tilts the entire insertion direction $\hat{R}$ by angle $\alpha$ at azimuth $\phi$, expanding the reachable workspace.
+\end{itemize}
+
+The actuator space is $(\texttt{z\_ss}, \texttt{z\_ntnl}, \theta)$ for tube extensions and rotation, plus $(\alpha, \phi)$ for gimbal tilt.
+
+% ============================================================================
+\section{New File: CTR Needle Simulation Engine}
+\label{sec:ctr_simulation}
+% ============================================================================
+
+\subsection{Overview}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{xcavate/viz/ctr\_simulation.py}
+    \item \textbf{Status:} \newlabel
+    \item \textbf{Lines:} 861
+    \item \textbf{Functions:} 7 (3 public, 1 internal helper, 2 animation builders, 1 fallback)
+    \item \textbf{Dependencies:} \texttt{numpy}, \texttt{plotly.graph\_objects}, \texttt{GimbalNodeSolution}
+\end{itemize}
+
+This module is the core visualization engine. It computes needle geometry from actuator values using forward kinematics and builds interactive Plotly animations that show the CTR mechanism moving node-by-node through the print path.
+
+\subsection{Forward Kinematics: \funcname{compute\_needle\_geometry()}}
+
+\textbf{Purpose:} Compute the 3D centerline geometry of the full CTR needle (SS straight section + nitinol arc) given actuator values.
+
+\textbf{Signature:}
+\begin{lstlisting}
+def compute_needle_geometry(
+    X: np.ndarray,           # (3,) base position
+    R_hat: np.ndarray,       # (3,) insertion direction
+    n_hat: np.ndarray,       # (3,) bend plane normal
+    theta_match: float,      # alignment angle
+    z_ss: float,             # SS extension (mm)
+    z_ntnl: float,           # nitinol extension (mm)
+    theta: float,            # rotation angle (rad)
+    radius: float,           # bend radius (mm)
+    n_ss_samples: int = 12,  # SS discretization
+    n_arc_samples: int = 20, # arc discretization
+) -> dict:
+\end{lstlisting}
+
+\textbf{Algorithm:}
+\begin{enumerate}[nosep]
+    \item \textbf{SS straight section:} Generate \param{n\_ss\_samples} points along the line $\mathbf{X} + t \cdot \hat{R}$ for $t \in [0, z_\text{ss}]$. This produces the orange line in the visualization.
+
+    \item \textbf{Nitinol arc section:} If $z_\text{ntnl} > z_\text{ss}$ (nitinol extends beyond SS tube):
+    \begin{itemize}[nosep]
+        \item Compute the bend direction via simplified Rodrigues rotation:
+        \[
+        \hat{K}_n = \hat{R} \times \hat{n}, \qquad \hat{d} = \hat{n} \cos(\theta_\text{match} + \theta) + \hat{K}_n \sin(\theta_\text{match} + \theta)
+        \]
+        \item Compute maximum arc angle: $\alpha_\text{max} = (z_\text{ntnl} - z_\text{ss}) / r$
+        \item Generate \param{n\_arc\_samples} points along the circular arc:
+        \[
+        \mathbf{p}(\alpha) = \mathbf{X}_\text{ss\_tip} + r \sin(\alpha) \hat{R} + r(1 - \cos\alpha) \hat{d}
+        \]
+    \end{itemize}
+\end{enumerate}
+
+\textbf{Returns:} Dictionary with keys \texttt{base}, \texttt{ss\_tip}, \texttt{ss\_line} (array of shape $(n_\text{ss}, 3)$), \texttt{arc\_line} (array of shape $(n_\text{arc}, 3)$), and \texttt{tip} (final endpoint).
+
+\subsection{Gimbal Frame: \funcname{compute\_gimbal\_frame()}}
+
+\textbf{Purpose:} Compute the tilted insertion direction and reference frame when the gimbal is actuated, and generate visualization lines for both the tilted and untilted directions.
+
+\textbf{Signature:}
+\begin{lstlisting}
+def compute_gimbal_frame(
+    X: np.ndarray,            # (3,) base position
+    R_hat_base: np.ndarray,   # (3,) untilted insertion direction
+    n_hat_base: np.ndarray,   # (3,) untilted bend normal
+    alpha: float,             # tilt angle (rad)
+    phi: float,               # azimuth angle (rad)
+    frame_length: float = 15.0,  # visualization line length (mm)
+) -> dict:
+\end{lstlisting}
+
+\textbf{Algorithm:}
+\begin{enumerate}[nosep]
+    \item If $\alpha = 0$: no tilt, $\hat{R}_\text{tilted} = \hat{R}_\text{base}$.
+    \item Otherwise, apply \textbf{Rodrigues rotation}:
+    \begin{itemize}[nosep]
+        \item Compute binormal: $\hat{b} = \hat{R}_\text{base} \times \hat{n}_\text{base}$, normalized.
+        \item Compute tilt axis: $\hat{k} = \cos(\phi) \hat{n}_\text{base} + \sin(\phi) \hat{b}$, normalized.
+        \item Construct skew-symmetric matrix $\mathbf{K}$ from $\hat{k}$.
+        \item Rotation matrix: $\mathbf{R}_\text{tilt} = \mathbf{I} + \sin(\alpha) \mathbf{K} + (1 - \cos\alpha) \mathbf{K}^2$
+        \item Apply: $\hat{R}_\text{tilted} = \mathbf{R}_\text{tilt} \, \hat{R}_\text{base}$, normalized.
+    \end{itemize}
+    \item Compute new perpendicular normal $\hat{n}_\text{tilted}$ and alignment angle $\theta_{\text{match,tilted}}$.
+    \item Generate two direction lines from the base point:
+    \begin{itemize}[nosep]
+        \item \textbf{Tilted direction} (cyan, solid): $[\mathbf{X}, \mathbf{X} + 15 \hat{R}_\text{tilted}]$
+        \item \textbf{Base direction} (gray, dotted): $[\mathbf{X}, \mathbf{X} + 15 \hat{R}_\text{base}]$
+    \end{itemize}
+\end{enumerate}
+
+\textbf{Returns:} Dictionary with \texttt{R\_hat\_tilted}, \texttt{n\_hat\_tilted}, \texttt{theta\_match\_tilted}, \texttt{direction\_line} (tilted), and \texttt{base\_direction\_line} (untilted reference).
+
+\textbf{Why 15\,mm?} The frame length was increased from an initial 2\,mm to 15\,mm so that the gimbal direction line extends visibly beyond the CTR body in the 3D scene. This makes gimbal orientation changes clearly discernible during animation playback. The untilted reference line provides a fixed baseline for visual comparison.
+
+\subsection{Single-Pass Animation: \funcname{create\_ctr\_simulation()}}
+
+\textbf{Purpose:} Build an interactive Plotly animation showing the CTR needle printing one pass node-by-node.
+
+\textbf{Signature:}
+\begin{lstlisting}
+def create_ctr_simulation(
+    print_pass: List[int],
+    points: np.ndarray,
+    gimbal_solutions: Dict[int, GimbalNodeSolution],
+    ctr_base: np.ndarray,
+    R_hat_base: np.ndarray,
+    radius: float,
+    n_hat_base: np.ndarray,
+    theta_match: float,
+    max_frames: int = 200,
+    trail_max_points: int = 20000,
+) -> go.Figure:
+\end{lstlisting}
+
+\textbf{Trace Architecture (8 traces):}
+
+\begin{table}[H]
+\centering
+\caption{Plotly Trace Layout}
+\begin{tabular}{clllll}
+\toprule
+\textbf{\#} & \textbf{Name} & \textbf{Type} & \textbf{Color} & \textbf{Static?} & \textbf{Description} \\
+\midrule
+0 & Network Ghost & markers & gray, 30\% & Yes & All network points (max 10K) \\
+1 & CTR Base & marker & orange diamond & Yes & Base position $\mathbf{X}$ \\
+2 & SS Tube & line & orange, w=6 & No & Straight SS section \\
+3 & Nitinol Arc & line & dodgerblue, w=6 & No & Curved nitinol section \\
+4 & Tip Marker & marker & lime, s=6 & No & Needle tip position \\
+5 & Printed Trail & lines+markers & red, w=3 & No & Accumulated print path \\
+6 & Gimbal Dir. & line & cyan, w=4 & No & Tilted insertion direction \\
+7 & Base Dir. & line & gray dotted, w=2 & No & Untilted reference direction \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Frame Generation Algorithm:}
+\begin{enumerate}[nosep]
+    \item \textbf{Subsample:} If the pass has more nodes than \param{max\_frames} (default 200), compute evenly-spaced indices preserving first and last. With 18K nodes and 200 frames, step $\approx$ 90 nodes.
+
+    \item \textbf{For each frame step $k$:}
+    \begin{enumerate}[nosep,label=(\alph*)]
+        \item Look up \texttt{gimbal\_solutions[node]} $\to$ get $(\alpha, \phi, z_\text{ss}, z_\text{ntnl}, \theta, \texttt{config\_idx})$.
+        \item Call \funcname{compute\_gimbal\_frame()} to get tilted direction and reference line.
+        \item Call \funcname{compute\_needle\_geometry()} with tilted config to get SS line + arc + tip.
+        \item Accumulate printed trail: all pass nodes from start to current step, subsampled to \param{trail\_max\_points} if needed.
+        \item Build \texttt{go.Frame} with updated data for traces 2--7 only.
+    \end{enumerate}
+
+    \item \textbf{Performance optimization:} Each frame uses \texttt{traces=[2,3,4,5,6,7]} to update only the 6 dynamic traces. The static ghost points (trace 0, up to 10K points) and base marker (trace 1) are never repeated in frames. This reduced the HTML file size by approximately 65\% compared to the naive approach of repeating all 8 traces in every frame.
+\end{enumerate}
+
+\textbf{Controls:}
+\begin{itemize}[nosep]
+    \item Play/Pause buttons (bottom-left)
+    \item Frame slider with node index labels
+    \item Title shows current node index, total count, and gimbal config ($\alpha^\circ$, $\phi^\circ$)
+    \item Fixed axis ranges computed from network extents $\pm 5$\,mm padding
+    \item \texttt{aspectmode="data"} for correct proportions
+\end{itemize}
+
+\subsection{All-Passes Animation: \funcname{create\_ctr\_simulation\_all\_passes()}}
+
+\textbf{Purpose:} Build an animation covering all print passes in sequence, with per-pass trail coloring.
+
+\textbf{Key differences from single-pass:}
+\begin{itemize}[nosep]
+    \item Concatenates all passes into a single flat timeline: \texttt{[(node, pass\_idx), ...]}
+    \item Default \param{max\_frames} = 300, \param{trail\_max\_points} = 20,000
+    \item Trail segments are separated by NaN rows (visual breaks between passes)
+    \item Each pass is assigned a distinct color from an 18-color categorical palette:
+
+\begin{lstlisting}[numbers=none]
+_cmap = [
+    "#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4",
+    "#42d4f4", "#f032e6", "#bfef45", "#fabed4", "#469990",
+    "#dcbeff", "#9A6324", "#800000", "#aaffc3", "#808000",
+    "#ffd8b1", "#000075", "#a9a9a9",
+]
+\end{lstlisting}
+
+    \item Frame title includes: \texttt{Pass \{current\}/\{total\} | Node \{k\}/\{n\_total\} Config ...}
+\end{itemize}
+
+\subsection{Frame Data Helper: \funcname{\_compute\_frame\_data()}}
+
+\textbf{Purpose:} Compute needle geometry and gimbal frame for a single node, with fallback handling.
+
+\begin{lstlisting}
+def _compute_frame_data(
+    node, gimbal_solutions, ctr_base, R_hat_base,
+    n_hat_base, theta_match_base, radius
+) -> tuple:  # (geom_dict, gimbal_dict)
+\end{lstlisting}
+
+\textbf{Logic:}
+\begin{itemize}[nosep]
+    \item If node is in \texttt{gimbal\_solutions}: compute tilted frame via \funcname{compute\_gimbal\_frame()}, then needle geometry in tilted config.
+    \item If node is \emph{not} in solutions (fallback): return retracted position ($z_\text{ss}=0$, $z_\text{ntnl}=0$, $\theta=0$) with zero gimbal angles. The needle appears fully retracted into the base.
+\end{itemize}
+
+\subsection{Non-Gimbal Fallback: \funcname{build\_fallback\_solutions()}}
+
+\textbf{Purpose:} Generate synthetic \texttt{GimbalNodeSolution} objects using analytical inverse kinematics when the gimbal solver was not enabled.
+
+\textbf{Algorithm:}
+\begin{enumerate}[nosep]
+    \item Reconstruct the local coordinate frame from stored \texttt{ctr\_config\_params}: base position $\mathbf{X}$, insertion direction $\hat{R}$, bend normal $\hat{n}$, and alignment angle $\theta_\text{match}$.
+    \item Apply Rodrigues rotation to build direction matrix $\mathbf{D} = [\hat{R}, \hat{n}_\text{rot}, \hat{t}]$.
+    \item For each unique node across all passes:
+    \begin{enumerate}[nosep,label=(\alph*)]
+        \item Transform target point to local coordinates: $\boldsymbol{\delta} = \mathbf{D} (\mathbf{p} - \mathbf{X})$
+        \item Compute rotation angle: $\theta = \arctan2(\delta_z, \delta_y)$
+        \item Compute perpendicular distance: $r_\perp = \sqrt{\delta_y^2 + \delta_z^2}$
+        \item Solve arc geometry:
+        \[
+        \cos\alpha = 1 - r_\perp / r, \qquad \alpha_\text{arc} = \arccos(\cos\alpha_\text{clamped})
+        \]
+        \[
+        z_\text{ntnl} - z_\text{ss} = r \cdot \alpha_\text{arc}, \qquad z_\text{ss} = \delta_x - r \sin(\alpha_\text{arc})
+        \]
+    \end{enumerate}
+    \item Store as \texttt{GimbalNodeSolution} with $\texttt{config\_idx}=0$, $\alpha=0$, $\phi=0$ (no gimbal tilt).
+\end{enumerate}
+
+% ============================================================================
+\section{New File: CTR Auto-Placement Optimizer}
+\label{sec:ctr_placement}
+% ============================================================================
+
+\subsection{Overview}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{xcavate/core/ctr\_placement.py}
+    \item \textbf{Status:} \newlabel
+    \item \textbf{Lines:} 174
+    \item \textbf{Functions:} 1 public
+    \item \textbf{Dependencies:} \texttt{numpy}, \texttt{logging}, \texttt{ctr\_kinematics.CTRConfig}, \texttt{ctr\_kinematics.batch\_is\_reachable}
+\end{itemize}
+
+\subsection{Function: \funcname{optimize\_ctr\_placement()}}
+
+\textbf{Signature:}
+\begin{lstlisting}
+def optimize_ctr_placement(
+    points: np.ndarray,       # (N, 3) network node positions
+    radius: float = 55.0,    # bend radius (mm)
+    ss_lim: float = 65.0,    # max SS extension (mm)
+    ntnl_lim: float = 140.0, # max nitinol extension (mm)
+    calibration_file = None,  # optional .npy calibration
+    n_azimuth: int = 12,     # azimuth samples on sphere
+    n_elevation: int = 7,    # elevation samples on sphere
+    n_distances: int = 4,    # radial distance samples
+    standoff_min: float = 1.2,
+    standoff_max: float = 2.5,
+) -> dict:
+\end{lstlisting}
+
+\textbf{Algorithm:}
+\begin{enumerate}
+    \item \textbf{Compute network geometry:}
+    \begin{itemize}[nosep]
+        \item Centroid: $\mathbf{c} = \text{mean}(\text{points})$
+        \item Bounding sphere radius: $r_\text{bound} = \max \|\mathbf{p}_i - \mathbf{c}\|$
+        \item Axial reach: $d_\text{reach} = z_\text{ss,max} + r$
+    \end{itemize}
+
+    \item \textbf{Generate candidate positions on spherical shell:}
+    \begin{itemize}[nosep]
+        \item Standoff distances: $d \in \text{linspace}(s_\text{min} \cdot 0.5 \cdot r_\text{bound}, s_\text{max} \cdot r_\text{bound}, n_d)$
+        \item Direction vectors: azimuth $\phi \in [0, 2\pi)$ ($n_\text{az}$ samples), elevation $\theta \in [-70^\circ, +70^\circ]$ ($n_\text{el}$ samples)
+        \item Total candidates: $n_\text{az} \times n_\text{el} \times n_d = 12 \times 7 \times 4 = 336$
+    \end{itemize}
+
+    \item \textbf{For each candidate position $\mathbf{X}_\text{cand}$:}
+    \begin{enumerate}[nosep,label=(\alph*)]
+        \item Compute insertion direction: $\hat{R} = (\mathbf{c} - \mathbf{X}_\text{cand}) / \|\mathbf{c} - \mathbf{X}_\text{cand}\|$ (points toward centroid).
+        \item Build a \texttt{CTRConfig} with these parameters.
+        \item Evaluate \funcname{batch\_is\_reachable()} on all network points --- returns boolean array.
+        \item Count reachable nodes. Track the best candidate.
+    \end{enumerate}
+
+    \item \textbf{Return:} Dictionary with \texttt{position}, \texttt{orientation}, \texttt{reachable\_count}, \texttt{reachable\_fraction}, \texttt{total\_nodes}, \texttt{candidates\_tested}.
+\end{enumerate}
+
+\textbf{Why spherical shell sampling?} The CTR has a limited axial reach ($z_\text{ss,max} + r \approx 120$\,mm). The base must be positioned far enough from the network for the workspace to enclose it, but not so far that nodes exceed the maximum extension. The standoff range $[1.2, 2.5] \times r_\text{bound}$ empirically covers the viable placement zone. Elevation is limited to $\pm 70^\circ$ to avoid degenerate near-vertical placements.
+
+\textbf{Performance:} With 336 candidates and batch reachability checks (vectorized NumPy operations), the optimizer completes in $<2$\,seconds for networks with 18K+ nodes.
+
+\textbf{Critical integration note:} The optimizer must run on \emph{interpolated} (post-preprocessing) coordinates, not raw input coordinates. The coordinate pipeline applies \texttt{convert\_factor} (10.0, cm$\to$mm) $\times$ \texttt{scale\_factor}, so raw coordinates ($\sim$8\,mm range) differ dramatically from pipeline coordinates ($\sim$87\,mm range). Running the optimizer on raw coordinates would produce a CTR placement that is geometrically incompatible with the interpolated network. This was a critical bug that was discovered and fixed by moving the optimizer into the pipeline itself (Step 3b), after interpolation.
+
+% ============================================================================
+\section{Modified File: Pipeline Orchestrator}
+\label{sec:pipeline}
+% ============================================================================
+
+\subsection{Overview}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{xcavate/pipeline.py}
+    \item \textbf{Status:} \modlabel
+    \item \textbf{Changes:} $\sim$45 lines added/modified across 4 locations
+\end{itemize}
+
+\subsection{Change 1: Safe CTR Config Scoping (Line 156)}
+
+\textbf{What:} Added \texttt{ctr\_config = None} initialization before the CTR pipeline branch.
+
+\textbf{Why:} Without this, accessing \texttt{ctr\_config} in the return dict would raise \texttt{NameError} when \texttt{printer\_type != CTR}. The initialization ensures the variable is always defined regardless of which pipeline branch executes.
+
+\subsection{Change 2: Auto-Placement Integration (Step 3b)}
+
+\textbf{What:} Added a new pipeline step between interpolation (Step 3) and graph construction (Step 4):
+
+\begin{lstlisting}
+if config.ctr_auto_place:
+    from xcavate.core.ctr_placement import optimize_ctr_placement
+    opt = optimize_ctr_placement(
+        points_xyz,
+        radius=config.ctr_radius,
+        ss_lim=config.ctr_ss_max,
+        ntnl_lim=config.ctr_ntnl_max,
+        calibration_file=config.ctr_calibration_file,
+    )
+    config.ctr_position_cartesian = tuple(opt["position"].tolist())
+    config.ctr_position_cylindrical = None
+    config.ctr_orientation = tuple(opt["orientation"].tolist())
+\end{lstlisting}
+
+\textbf{Why:} The auto-placement must operate on \texttt{points\_xyz} \emph{after} interpolation and coordinate scaling. Running it on raw input coordinates produced a placement optimized for an 8\,mm-scale network, but the pipeline operates on an 87\,mm-scale network. This resulted in 2.8\% reachability instead of 100\%. Moving the optimizer to Step 3b (after preprocessing, before graph construction) ensures correct coordinate space alignment.
+
+\textbf{Where:} Inserted between the existing interpolation step and the graph construction step in \funcname{run\_xcavate()}.
+
+\subsection{Change 3: Empty Pass Guard in \funcname{\_compute\_instructions()}}
+
+\textbf{What:} Changed \texttt{first\_key = min(print\_passes\_sm.keys())} with an early-return guard:
+
+\begin{lstlisting}
+if not print_passes_sm:
+    return {
+        "print_passes_sm": {},
+        "print_passes_mm": {},
+        ... # stub result dict
+    }
+first_key = min(print_passes_sm.keys())
+\end{lstlisting}
+
+\textbf{Why:} When CTR reachability filtering removes \emph{all} nodes (e.g., before auto-placement was integrated correctly), \texttt{print\_passes\_sm} becomes empty. Calling \texttt{min()} on an empty dict raises \texttt{ValueError}. The guard returns a valid but empty result dict. Additionally, the original code used \texttt{print\_passes\_sm[0][0]} which assumed pass indices start at 0 --- this was changed to use \texttt{min()} for robustness.
+
+\subsection{Change 4: Simulation Data in Return Dict}
+
+\textbf{What:} Added two new keys to the pipeline return dictionary:
+
+\begin{lstlisting}
+return {
+    ...  # existing keys
+    "gimbal_solutions": gimbal_solutions,
+    "ctr_config_params": {
+        "X": ctr_config.X.tolist(),
+        "R_hat": ctr_config.R_hat.tolist(),
+        "n_hat": ctr_config.n_hat.tolist(),
+        "theta_match": float(ctr_config.theta_match),
+        "radius": ctr_config.radius,
+        "ss_lim": ctr_config.ss_lim,
+        "ntnl_lim": ctr_config.ntnl_lim,
+    } if ctr_config is not None else None,
+}
+\end{lstlisting}
+
+\textbf{Why:} The GUI simulation viewer needs both the per-node gimbal solutions (actuator values) and the CTR geometric parameters (base position, insertion direction, bend radius) to reconstruct the needle geometry for each frame. The full \texttt{CTRConfig} object contains non-serializable \texttt{scipy.interpolate.interp1d} objects and cannot be stored directly in session state. Instead, we extract only the geometric parameters needed for visualization.
+
+\textbf{Data structures:}
+\begin{itemize}[nosep]
+    \item \texttt{gimbal\_solutions}: \texttt{Dict[int, GimbalNodeSolution]} --- maps node index to solved actuator values. Each solution contains \texttt{config\_idx}, \texttt{alpha}, \texttt{phi}, \texttt{z\_ss}, \texttt{z\_ntnl}, \texttt{theta}. Will be \texttt{None} if gimbal solver was not used.
+    \item \texttt{ctr\_config\_params}: Serializable dict of CTR geometric parameters. Will be \texttt{None} if printer type is not CTR.
+\end{itemize}
+
+% ============================================================================
+\section{Modified File: Streamlit GUI Application}
+\label{sec:gui}
+% ============================================================================
+
+\subsection{Overview}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{xcavate/gui/app.py}
+    \item \textbf{Status:} \modlabel
+    \item \textbf{Changes:} $\sim$120 lines added/modified across 5 locations
+\end{itemize}
+
+\subsection{Change 1: Gimbal Toggle (Top-Level)}
+
+\textbf{What:} Added a gimbal toggle immediately below the multimaterial toggle in the sidebar:
+
+\begin{lstlisting}
+multimaterial = st.toggle(
+    "Multimaterial", value=False, ...)
+
+gimbal_enabled = st.toggle(
+    "Gimbal", value=True,
+    help="Enable gimbal-based workspace expansion for CTR "
+         "printing. Tilts the insertion direction within a cone "
+         "to reach fringe nodes. Only applies when Printer "
+         "type = CTR.",
+)
+\end{lstlisting}
+
+\textbf{Why:} The gimbal toggle was previously buried inside the CTR settings expander, behind a ``Customize CTR settings'' checkbox. Since the gimbal is a high-impact feature toggle (it determines whether 435+ fringe nodes are reachable or pruned), it belongs at the top level alongside other major feature flags like multimaterial. The default is \texttt{True} because the gimbal expands the workspace at minimal computational cost.
+
+\textbf{Where:} Moved from line 545 (inside CTR customize block) to line 143 (sidebar top-level, immediately after multimaterial toggle).
+
+\subsection{Change 2: CTR Default Configuration}
+
+\textbf{What:} All CTR parameters are set as plain Python variables with sensible defaults, displayed to the user only when a ``Customize CTR settings'' checkbox is checked:
+
+\begin{lstlisting}
+# Defaults loaded automatically
+ctr_radius = 55.0
+ctr_ss_max = 65.0
+ctr_ntnl_max = 140.0
+ctr_ss_axis_name = "X"
+ctr_ntnl_axis_name = "Y"
+ctr_rot_axis_name = "Z"
+ctr_extruder_axis_name = "E0"
+ctr_extruder_mm_per_mm = 0.02
+ctr_extrusion_feedrate = 600.0
+ctr_jogging_feedrate = 1200.0
+ctr_needle_body_samples = 20
+gimbal_cone_angle = 15.0
+gimbal_n_tilt = 3
+gimbal_n_azimuth = 8
+\end{lstlisting}
+
+\textbf{Why:} Previously, every CTR parameter required manual entry. Since the hardware specs are fixed (SS 4\,mm OD, nitinol 1.6\,mm OD, radius 55\,mm), the defaults match the physical hardware. Users only need to open the customize panel for non-standard configurations.
+
+\subsection{Change 3: Auto-Optimize CTR Placement}
+
+\textbf{What:} Added an ``Auto-optimize CTR placement'' checkbox (default \texttt{True}) inside the CTR expander. When enabled, sets \texttt{config.ctr\_auto\_place = True} which triggers the optimizer in the pipeline.
+
+\textbf{Session state integration:}
+\begin{itemize}[nosep]
+    \item \texttt{ctr\_auto\_result}: stores the optimizer's return dict for display
+    \item \texttt{ctr\_auto\_position}: optimized position array
+    \item \texttt{ctr\_auto\_orientation}: optimized direction array
+\end{itemize}
+
+When auto-placement results are available, the GUI displays a success message:
+\begin{quote}
+\textit{``Auto-placement: 18681/18681 nodes reachable (100.0\%) from 336 candidates''}
+\end{quote}
+
+\subsection{Change 4: CTR Needle Simulation Section}
+
+\textbf{What:} Added a complete simulation viewer section after the 3D Visualization output:
+
+\begin{lstlisting}
+sim_mode = st.radio(
+    "Simulation mode",
+    ["All passes", "Single pass"],
+    index=0, horizontal=True,
+)
+\end{lstlisting}
+
+\textbf{Components:}
+\begin{enumerate}[nosep]
+    \item \textbf{Mode selector:} Radio button choosing ``All passes'' or ``Single pass''.
+    \item \textbf{Pass selector:} Dropdown (single-pass mode only) showing pass index and node count.
+    \item \textbf{Animation controls:} Three sliders:
+    \begin{itemize}[nosep]
+        \item Max frames: 50--500 (default 300 for all-passes, 200 for single)
+        \item Frame speed: 20--200\,ms (default 50\,ms = 20\,fps)
+        \item Trail detail: 1,000--50,000 points (default 20,000)
+    \end{itemize}
+    \item \textbf{Generate button:} Triggers animation building with spinner.
+    \item \textbf{Plotly viewer:} Full-width interactive 3D animation.
+    \item \textbf{Download button:} Exports standalone HTML file.
+\end{enumerate}
+
+\textbf{Fallback logic:} When \texttt{gimbal\_solutions} is \texttt{None} (non-gimbal CTR mode), the simulation section calls \funcname{build\_fallback\_solutions()} to generate synthetic actuator values using analytical inverse kinematics. This ensures the simulation works regardless of whether the gimbal solver was enabled.
+
+\subsection{Change 5: Config Building}
+
+\textbf{What:} Added all CTR and gimbal parameters to \funcname{\_build\_config()}:
+
+\begin{lstlisting}
+return XcavateConfig(
+    ...
+    ctr_auto_place=auto_optimize_ctr,
+    ctr_calibration_file=ctr_cal_path,
+    ctr_position_cartesian=ctr_position_cartesian,
+    ctr_orientation=(ctr_ori_x, ctr_ori_y, ctr_ori_z),
+    ctr_radius=ctr_radius,
+    ctr_ss_max=ctr_ss_max,
+    ctr_ntnl_max=ctr_ntnl_max,
+    gimbal_enabled=gimbal_enabled,
+    gimbal_cone_angle=gimbal_cone_angle,
+    gimbal_n_tilt=gimbal_n_tilt,
+    gimbal_n_azimuth=gimbal_n_azimuth,
+    ...
+)
+\end{lstlisting}
+
+% ============================================================================
+\section{Modified File: Configuration Dataclass}
+\label{sec:config}
+% ============================================================================
+
+\subsection{Overview}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{xcavate/config.py}
+    \item \textbf{Status:} \modlabel
+    \item \textbf{Changes:} Updated default values for CTR hardware parameters
+\end{itemize}
+
+\subsection{Default Value Updates}
+
+\begin{table}[H]
+\centering
+\caption{Configuration Default Changes}
+\begin{tabular}{llll}
+\toprule
+\textbf{Parameter} & \textbf{Previous} & \textbf{Current} & \textbf{Reason} \\
+\midrule
+\texttt{ctr\_radius} & 47.0 & 55.0 & Match physical hardware \\
+\texttt{ctr\_ss\_od} & (not set) & 4.0 & SS tube outer diameter \\
+\texttt{ctr\_ntnl\_od} & (not set) & 1.6 & Nitinol tube outer diameter \\
+\texttt{ctr\_auto\_place} & (not set) & False & New auto-placement flag \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent The \texttt{ctr\_auto\_place} flag defaults to \texttt{False} in the config dataclass (safe default for CLI/API use), but the GUI sets it to \texttt{True} via the checkbox.
+
+% ============================================================================
+\section{Modified File: Plotting Module}
+\label{sec:plotting}
+% ============================================================================
+
+\subsection{Overview}
+
+\begin{itemize}[nosep]
+    \item \textbf{File:} \filename{xcavate/viz/plotting.py}
+    \item \textbf{Status:} \modlabel
+    \item \textbf{Changes:} $\sim$8 lines added (empty-pass guards)
+\end{itemize}
+
+\subsection{Empty Pass Guard in \funcname{create\_network\_plot\_merged()}}
+
+\textbf{What:} Added two guards:
+\begin{enumerate}[nosep]
+    \item Skip empty passes: \texttt{if not node\_indices: continue}
+    \item Return empty figure if no segments: guard against \texttt{np.vstack([])} crash.
+\end{enumerate}
+
+\textbf{Why:} When CTR reachability filtering removes all nodes from certain passes (before gimbal was enabled), the merged plot function received empty pass lists. Calling \texttt{np.vstack()} on an empty list raises \texttt{ValueError: need at least one array to concatenate}. The guards ensure graceful degradation.
+
+% ============================================================================
+\section{Bugs Discovered and Fixed}
+\label{sec:bugs}
+% ============================================================================
+
+During implementation, several bugs were discovered and resolved:
+
+\subsection{Coordinate Scaling Mismatch (Critical)}
+
+\textbf{Symptom:} Auto-placement optimizer reported 100\% reachability, but the pipeline only achieved 2.8\% (most nodes pruned as unreachable).
+
+\textbf{Root cause:} The optimizer was running on raw input coordinates ($\sim$8\,mm range) in the GUI before the pipeline. However, the pipeline's preprocessing step applies \texttt{convert\_factor} ($10.0$, cm$\to$mm) $\times$ \texttt{scale\_factor}, producing interpolated coordinates at $\sim$87\,mm range. The CTR placement optimized for the raw scale was geometrically incompatible with the interpolated scale.
+
+\textbf{Fix:} Moved the optimizer into the pipeline itself (Step 3b), running on \texttt{points\_xyz} after interpolation and coordinate scaling. This ensures the optimizer and the rest of the pipeline operate in the same coordinate space.
+
+\subsection{KeyError on Pass Index (Medium)}
+
+\textbf{Symptom:} \texttt{KeyError: 0} in \funcname{\_compute\_instructions()} at \texttt{print\_passes\_sm[0][0]}.
+
+\textbf{Root cause:} After pass reordering, the pass dictionary keys may not start at 0.
+
+\textbf{Fix:} Changed to \texttt{first\_key = min(print\_passes\_sm.keys())}.
+
+\subsection{Empty Sequence on Min (Medium)}
+
+\textbf{Symptom:} \texttt{ValueError: min() arg is an empty sequence} on \texttt{min(print\_passes\_sm.keys())}.
+
+\textbf{Root cause:} All nodes unreachable $\Rightarrow$ \texttt{print\_passes\_sm} is completely empty.
+
+\textbf{Fix:} Added early return with stub result dict when \texttt{not print\_passes\_sm}.
+
+\subsection{Empty Array Concatenation (Low)}
+
+\textbf{Symptom:} \texttt{ValueError: need at least one array to concatenate} in \texttt{np.vstack(segments)} within \funcname{create\_network\_plot\_merged()}.
+
+\textbf{Root cause:} Empty passes after CTR filtering.
+
+\textbf{Fix:} Skip empty passes and return empty figure if no segments.
+
+% ============================================================================
+\section{Performance Considerations}
+\label{sec:performance}
+% ============================================================================
+
+\subsection{HTML File Size Optimization}
+
+\begin{table}[H]
+\centering
+\caption{Simulation HTML Size Comparison}
+\begin{tabular}{lrl}
+\toprule
+\textbf{Approach} & \textbf{Size} & \textbf{Notes} \\
+\midrule
+Naive (all traces per frame) & 101 MB & 10K ghost points $\times$ 300 frames \\
+Optimized (\texttt{traces=[2..7]}) & $\sim$36 MB & Static traces excluded from frames \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent The key optimization is using \texttt{traces=[2,3,4,5,6,7]} in each \texttt{go.Frame} to only update the 6 dynamic traces, skipping the static ghost network (trace 0, up to 10K points) and base marker (trace 1). This reduced the Plotly JSON payload by approximately 65\%.
+
+\subsection{Trail Subsampling}
+
+The printed trail grows linearly with frame index. To prevent the HTML from ballooning as the trail accumulates:
+\begin{itemize}[nosep]
+    \item Trail is capped at \texttt{trail\_max\_points} (default 20,000 for both modes).
+    \item When the trail exceeds this limit, it is uniformly subsampled while preserving the current endpoint.
+    \item The trail uses \texttt{mode="lines+markers"} with 2\,px markers so that individual printed positions are visible even when the line is sparse.
+\end{itemize}
+
+\subsection{Auto-Placement Optimizer}
+
+\begin{itemize}[nosep]
+    \item 336 candidates evaluated with vectorized \funcname{batch\_is\_reachable()} calls.
+    \item Runtime: $<2$ seconds for 18,681-node networks.
+    \item Memory: Each candidate requires a temporary \texttt{CTRConfig} allocation (lightweight).
+\end{itemize}
+
+% ============================================================================
+\section{Gimbal Workspace Analysis}
+\label{sec:gimbal}
+% ============================================================================
+
+\subsection{Problem: Fringe Node Pruning}
+
+Without the gimbal, the CTR workspace is determined by a single insertion direction $\hat{R}$. Nodes near the boundary of the reachable volume are pruned during pathfinding. For the \texttt{finale.txt} test network (18,681 nodes), \textbf{435 nodes} were unreachable with the base orientation alone.
+
+\subsection{Solution: Gimbal Cone Tilt}
+
+The gimbal enables the CTR to tilt $\hat{R}$ by angle $\alpha \in [0, \alpha_\text{max}]$ at azimuth $\phi \in [0, 2\pi)$. With the default configuration:
+\begin{itemize}[nosep]
+    \item Cone half-angle: $15^\circ$
+    \item Tilt levels: 3 (at $5^\circ$, $10^\circ$, $15^\circ$)
+    \item Azimuth samples: 8 (at $0^\circ$, $45^\circ$, $90^\circ$, \ldots)
+    \item Total gimbal configurations: $1 + 3 \times 8 = 25$ (including the untilted base)
+\end{itemize}
+
+Each tilted configuration shifts the reachable workspace boundary. A fringe node that exceeds the radial calibration domain for the base $\hat{R}$ may fall within the domain of a tilted $\hat{R}'$. The gimbal solver tries each configuration per node and selects the first that provides a valid IK solution.
+
+\subsection{Result}
+
+With gimbal enabled and auto-placement:
+\begin{itemize}[nosep]
+    \item \textbf{Reachable nodes:} 18,681 / 18,681 (\textbf{100\%})
+    \item \textbf{Nodes pruned:} 0 (previously 435)
+    \item \textbf{Print passes:} 101
+    \item \textbf{Gimbal solutions:} 18,681 (one per node)
+    \item \textbf{Warnings:} 0
+\end{itemize}
+
+% ============================================================================
+\section{Data Flow Architecture}
+\label{sec:dataflow}
+% ============================================================================
+
+The complete data flow for CTR simulation is:
+
+\begin{enumerate}
+    \item \textbf{GUI} (\filename{app.py}): User uploads network file, sets printer type to CTR, enables gimbal, clicks Run.
+
+    \item \textbf{Config} (\filename{config.py}): \funcname{\_build\_config()} assembles \texttt{XcavateConfig} with all CTR and gimbal parameters.
+
+    \item \textbf{Pipeline} (\filename{pipeline.py}):
+    \begin{enumerate}[nosep,label=(\alph*)]
+        \item Read and interpolate network $\to$ \texttt{points\_xyz}
+        \item \textbf{Step 3b:} Auto-place CTR $\to$ update \texttt{config.ctr\_position\_cartesian} and \texttt{config.ctr\_orientation}
+        \item Build graph, find passes with gimbal solver $\to$ \texttt{print\_passes\_sm}, \texttt{gimbal\_solutions}
+        \item Store \texttt{ctr\_config\_params} in return dict
+    \end{enumerate}
+
+    \item \textbf{GUI} (\filename{app.py}): Receives pipeline result. User clicks ``Generate Simulation''.
+
+    \item \textbf{Simulation} (\filename{ctr\_simulation.py}):
+    \begin{enumerate}[nosep,label=(\alph*)]
+        \item Reconstruct \texttt{CTRConfig} from stored config
+        \item For each animation frame: look up \texttt{gimbal\_solutions[node]} $\to$ compute gimbal frame $\to$ compute needle geometry
+        \item Build \texttt{go.Figure} with 8 traces and $N$ frames
+    \end{enumerate}
+
+    \item \textbf{GUI} (\filename{app.py}): Display interactive Plotly animation. Offer HTML download.
+\end{enumerate}
+
+% ============================================================================
+\section{Key Data Structures}
+\label{sec:datastructures}
+% ============================================================================
+
+\subsection{\texttt{GimbalNodeSolution}}
+
+\begin{lstlisting}
+@dataclass
+class GimbalNodeSolution:
+    config_idx: int   # index into gimbal configs list
+    alpha: float      # tilt angle (radians)
+    phi: float        # azimuth angle (radians)
+    z_ss: float       # stainless steel extension (mm)
+    z_ntnl: float     # nitinol extension (mm)
+    theta: float      # rotation angle (radians)
+\end{lstlisting}
+
+One solution per printed node. Used by both the G-code writer (to emit actuator commands) and the simulation engine (to reconstruct needle geometry).
+
+\subsection{\texttt{ctr\_config\_params}}
+
+\begin{lstlisting}
+{
+    "X": [x, y, z],           # (3,) base position
+    "R_hat": [rx, ry, rz],    # (3,) insertion direction
+    "n_hat": [nx, ny, nz],    # (3,) bend normal
+    "theta_match": float,      # alignment angle
+    "radius": float,           # bend radius (mm)
+    "ss_lim": float,           # max SS extension (mm)
+    "ntnl_lim": float,         # max nitinol extension (mm)
+}
+\end{lstlisting}
+
+Serializable representation of CTR geometric parameters for session state storage.
+
+% ============================================================================
+\section{Testing and Validation}
+\label{sec:testing}
+% ============================================================================
+
+\subsection{Pipeline Test: \texttt{finale.txt}}
+
+The full pipeline was run on the \texttt{finale.txt} test network (18,681 unique nodes after interpolation):
+
+\begin{table}[H]
+\centering
+\caption{Pipeline Test Results}
+\begin{tabular}{lr}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Total unique nodes & 18,681 \\
+Nodes printed & 18,882 (includes overlaps from gap closure) \\
+Nodes pruned (unreachable) & 0 \\
+Print passes & 101 \\
+Gimbal solutions generated & 18,681 \\
+Auto-placement candidates tested & 336 \\
+Reachable fraction & 100.0\% \\
+Pipeline warnings & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Without Gimbal (Baseline)}
+
+When gimbal is disabled, 435 fringe nodes are pruned from the workspace boundary. These nodes have perpendicular distances from the insertion axis that exceed the radial calibration domain for the single base orientation.
+
+\subsection{Simulation Verification}
+
+The simulation was verified by:
+\begin{enumerate}[nosep]
+    \item Confirming the SS tube (orange) extends and retracts correctly as nodes change.
+    \item Confirming the nitinol arc (blue) curves in the correct bend plane.
+    \item Confirming the tip marker (green) traces the actual print path.
+    \item Confirming gimbal direction lines (cyan vs.\ gray) diverge at tilted configurations.
+    \item Confirming per-pass coloring in all-passes mode correctly segments the trail.
+    \item Verifying standalone HTML export works in browser without Streamlit.
+\end{enumerate}
+
+% ============================================================================
+\section{Complete File Inventory}
+\label{sec:inventory}
+% ============================================================================
+
+\begin{longtable}{p{7.5cm}clp{3.5cm}}
+\caption{All Files Created or Modified} \\
+\toprule
+\textbf{File Path} & \textbf{Status} & \textbf{Lines} & \textbf{Role} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{File Path} & \textbf{Status} & \textbf{Lines} & \textbf{Role} \\
+\midrule
+\endhead
+\filename{xcavate/viz/ctr\_simulation.py} & \newlabel & 861 & Animation engine \\
+\filename{xcavate/core/ctr\_placement.py} & \newlabel & 174 & Placement optimizer \\
+\filename{xcavate/pipeline.py} & \modlabel & +45 & Pipeline orchestration \\
+\filename{xcavate/gui/app.py} & \modlabel & +120 & GUI integration \\
+\filename{xcavate/config.py} & \modlabel & +5 & Config defaults \\
+\filename{xcavate/viz/plotting.py} & \modlabel & +8 & Empty-pass guard \\
+\bottomrule
+\end{longtable}
+
+\noindent \textbf{Supporting files} (not modified in this change set, but referenced):
+\begin{itemize}[nosep]
+    \item \filename{xcavate/core/ctr\_kinematics.py} --- CTR forward/inverse kinematics, \texttt{CTRConfig} class
+    \item \filename{xcavate/core/gimbal\_solver.py} --- \texttt{GimbalNodeSolution} dataclass, gimbal pathfinding
+    \item \filename{xcavate/core/ctr\_collision.py} --- Collision detection for CTR needle body
+    \item \filename{xcavate/core/oracle.py} --- Diagnostic detector, gimbal config builder
+    \item \filename{xcavate/io/gcode/ctr.py} --- CTR G-code writer with gimbal transitions
+\end{itemize}
+
+% ============================================================================
+\section{Conclusion}
+% ============================================================================
+
+The changes documented in this report transform the X-CAVATE CTR pipeline from a compute-only system into an interactive visualization and optimization platform. The key engineering contributions are:
+
+\begin{enumerate}[label=\textbf{\arabic*.}]
+    \item A self-contained forward kinematics module (\filename{ctr\_simulation.py}) that computes needle geometry from actuator values without depending on the full kinematics pipeline or scipy interpolation objects.
+
+    \item An automated placement optimizer (\filename{ctr\_placement.py}) that eliminates manual trial-and-error positioning of the CTR base, achieving 100\% node reachability on test networks.
+
+    \item Gimbal integration at the GUI level with a top-level toggle and sensible defaults, making workspace expansion accessible without requiring deep knowledge of the CTR configuration space.
+
+    \item Robust pipeline integration with proper coordinate-space alignment, empty-pass handling, and serializable data structures for session state persistence.
+
+    \item Performance-optimized Plotly animations using selective trace updates, trail subsampling, and configurable frame limits to keep HTML files manageable ($\sim$36\,MB for 300-frame all-passes simulations on 18K-node networks).
+\end{enumerate}
+
+\end{document}

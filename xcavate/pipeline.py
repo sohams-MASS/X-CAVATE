@@ -151,10 +151,74 @@ def run_xcavate(
     )
     write_graph(str(config.graph_dir / "graph.txt"), graph)
 
+    # Warnings list (populated by CTR filtering and multimaterial checks)
+    warnings: List[str] = []
+    ctr_config = None
+
+    # ── Step 3b: CTR auto-placement and reachability filtering ──────────
+    if config.printer_type == PrinterType.CTR:
+        # Auto-optimize placement if enabled (runs on interpolated points)
+        if config.ctr_auto_place:
+            from xcavate.core.ctr_placement import optimize_ctr_placement
+            _progress(3, "Auto-optimizing CTR placement")
+            opt = optimize_ctr_placement(
+                points_xyz,
+                radius=config.ctr_radius,
+                ss_lim=config.ctr_ss_max,
+                ntnl_lim=config.ctr_ntnl_max,
+                calibration_file=config.ctr_calibration_file,
+            )
+            config.ctr_position_cartesian = tuple(opt["position"].tolist())
+            config.ctr_position_cylindrical = None
+            config.ctr_orientation = tuple(opt["orientation"].tolist())
+            logger.info(
+                "CTR auto-placement: %d/%d reachable (%.1f%%) at position %s",
+                opt["reachable_count"], opt["total_nodes"],
+                100 * opt["reachable_fraction"], opt["position"],
+            )
+
+        from xcavate.core.ctr_kinematics import CTRConfig, batch_is_reachable
+        ctr_config = CTRConfig.from_xcavate_config(config)
+        graph_nodes = np.array(sorted(graph.keys()), dtype=np.intp)
+
+        if config.gimbal_enabled:
+            from xcavate.core.gimbal_solver import gimbal_reachable_nodes
+            reachable_mask = gimbal_reachable_nodes(
+                points_xyz, graph_nodes, ctr_config,
+                config.gimbal_cone_angle, config.gimbal_n_tilt, config.gimbal_n_azimuth,
+            )
+        else:
+            reachable_mask = batch_is_reachable(points_xyz[graph_nodes], ctr_config)
+
+        unreachable = set(graph_nodes[~reachable_mask])
+        if unreachable:
+            msg = f"CTR: {len(unreachable)} nodes outside workspace, removed from graph"
+            logger.warning(msg)
+            warnings.append(msg)
+            for n in unreachable:
+                graph.pop(n, None)
+            for nbrs in graph.values():
+                for u in unreachable:
+                    if u in nbrs:
+                        nbrs.remove(u)
+
     # ── Step 4: Generate print passes ────────────────────────────────────
     _progress(4, "Generating collision-free print passes")
 
-    raw_passes = generate_print_passes(graph, points_xyz, config)
+    gimbal_solutions = None
+    if config.gimbal_enabled and config.printer_type == PrinterType.CTR:
+        from xcavate.core.gimbal_solver import run_gimbal_solver
+        raw_passes, gimbal_solutions = run_gimbal_solver(
+            graph, points_xyz, ctr_config, config.nozzle_radius,
+            cone_angle_deg=config.gimbal_cone_angle,
+            n_tilt=config.gimbal_n_tilt,
+            n_azimuth=config.gimbal_n_azimuth,
+            n_arc_samples=config.ctr_needle_body_samples,
+            strategy="angular_sector",
+            n_sectors=config.ctr_num_sectors,
+        )
+    else:
+        raw_passes = generate_print_passes(graph, points_xyz, config)
 
     logger.info("Generated %d raw print passes", len(raw_passes))
 
@@ -209,7 +273,6 @@ def run_xcavate(
     print_passes_mm = None
     speed_map_mm = None
     material_map = None
-    warnings: List[str] = []
 
     if config.multimaterial and num_columns < 5:
         msg = (
@@ -299,12 +362,17 @@ def run_xcavate(
 
     # G-code: single material
     writer = _create_gcode_writer(config, custom_codes)
-    writer.write(
-        config.gcode_dir / f"gcode_SM_{config.printer_type.name.lower()}.txt",
-        print_passes_sm, points_interp,
+    sm_gcode_kwargs = dict(
         speed_map=speed_map_sm,
         gap_extensions=gap_ext_sm,
         network_top=network_top,
+    )
+    if gimbal_solutions is not None:
+        sm_gcode_kwargs['gimbal_solutions'] = gimbal_solutions
+    writer.write(
+        config.gcode_dir / f"gcode_SM_{config.printer_type.name.lower()}.txt",
+        print_passes_sm, points_interp,
+        **sm_gcode_kwargs,
     )
 
     # G-code: multimaterial
@@ -338,6 +406,16 @@ def run_xcavate(
         "material_map": material_map,
         "instructions": instructions,
         "warnings": warnings,
+        "gimbal_solutions": gimbal_solutions,
+        "ctr_config_params": {
+            "X": ctr_config.X.tolist(),
+            "R_hat": ctr_config.R_hat.tolist(),
+            "n_hat": ctr_config.n_hat.tolist(),
+            "theta_match": float(ctr_config.theta_match),
+            "radius": ctr_config.radius,
+            "ss_lim": ctr_config.ss_lim,
+            "ntnl_lim": ctr_config.ntnl_lim,
+        } if ctr_config is not None else None,
     }
 
 
@@ -357,6 +435,9 @@ def _create_gcode_writer(config: XcavateConfig, custom_codes):
         return PositiveInkGcodeWriter(config, custom_codes)
     elif config.printer_type == PrinterType.AEROTECH:
         return AerotechGcodeWriter(config, custom_codes)
+    elif config.printer_type == PrinterType.CTR:
+        from xcavate.io.gcode.ctr import CTRGcodeWriter
+        return CTRGcodeWriter(config, custom_codes)
     else:
         raise ValueError(f"Unknown printer type: {config.printer_type}")
 
@@ -543,6 +624,18 @@ def _compute_instructions(
     Replicates xcavate.py lines 5488-5565.  Returns a structured dict so that
     the GUI can display the same information without parsing stdout.
     """
+    if not print_passes_sm:
+        return {
+            "container_dims": {"x": config.container_x, "y": config.container_y, "z": config.container_height},
+            "start_position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "padding": {"left": 0.0, "right": 0.0, "front": 0.0, "back": 0.0},
+            "sm_instructions": ["No print passes were generated."],
+            "mm_calibration": [],
+            "mm_instructions": [],
+            "axis_1": config.axis_1,
+            "axis_2": config.axis_2,
+        }
+
     # Network bounding box
     min_x = float(np.min(points[:, 0]))
     max_x = float(np.max(points[:, 0]))
@@ -553,7 +646,8 @@ def _compute_instructions(
     total_z = abs(min_z) + abs(max_z)
 
     # Starting coordinate (first node of first pass)
-    start_node = print_passes_sm[0][0]
+    first_key = min(print_passes_sm.keys())
+    start_node = print_passes_sm[first_key][0]
     xs = points[start_node, 0]
     ys = points[start_node, 1]
 

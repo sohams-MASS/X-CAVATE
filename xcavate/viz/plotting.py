@@ -167,6 +167,8 @@ def create_network_plot_merged(
 
     for idx, key in enumerate(pass_keys):
         node_indices = print_passes[key]
+        if not node_indices:
+            continue
         coords = points[node_indices][:, :3]
 
         if segments:
@@ -179,6 +181,14 @@ def create_network_plot_merged(
         if color_list is not None:
             pass_color = colors[idx] if idx < len(colors) else "gray"
             color_list.extend([pass_color] * len(coords))
+
+    if not segments:
+        fig = go.Figure(layout_title_text=title)
+        fig.update_layout(margin=dict(l=30, r=30, t=30, b=30), title_x=0.5)
+        fig.update_scenes(aspectmode="cube")
+        if output_path:
+            fig.write_html(str(output_path), include_plotlyjs="cdn")
+        return fig
 
     all_coords = np.vstack(segments)
 

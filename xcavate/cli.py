@@ -47,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--custom", type=int, required=True,
                     help="Providing custom G-code? (1=yes, 0=no)")
     p.add_argument("--printer_type", type=int, required=True, default=0,
-                    help="Type of printer: 0=Pressure, 1=Positive Ink, 2=Aerotech")
+                    help="Type of printer: 0=Pressure, 1=Positive Ink, 2=Aerotech, 3=CTR")
 
     # --- Geometry ---
     p.add_argument("--container_x", type=float, default=50, help="Container x-dimension (mm)")
@@ -110,10 +110,59 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--positiveInk_end_arterial", type=float, default=0)
     p.add_argument("--positiveInk_end_venous", type=float, default=0)
 
+    # --- CTR parameters ---
+    p.add_argument("--ctr_calibration_file", type=str, default=None,
+                    help="Path to CTR calibration .npy file")
+    p.add_argument("--ctr_position_cartesian", type=float, nargs=3, default=None,
+                    metavar=("X", "Y", "Z"),
+                    help="CTR base position in Cartesian (mm)")
+    p.add_argument("--ctr_position_cylindrical", type=float, nargs=3, default=None,
+                    metavar=("R", "PHI", "Z"),
+                    help="CTR base position in cylindrical (r, phi, z)")
+    p.add_argument("--ctr_orientation", type=float, nargs=3, default=[0.0, -1.0, 0.0],
+                    metavar=("RX", "RY", "RZ"),
+                    help="CTR insertion direction vector (default: 0 -1 0)")
+    p.add_argument("--ctr_radius", type=float, default=47.0,
+                    help="CTR bend radius (mm, default: 47)")
+    p.add_argument("--ctr_ss_max", type=float, default=65.0,
+                    help="Max SS extension (mm, default: 65)")
+    p.add_argument("--ctr_ntnl_max", type=float, default=140.0,
+                    help="Max nitinol extension (mm, default: 140)")
+    p.add_argument("--ctr_ss_axis_name", type=str, default="X",
+                    help="G-code axis label for SS tube")
+    p.add_argument("--ctr_ntnl_axis_name", type=str, default="Y",
+                    help="G-code axis label for nitinol tube")
+    p.add_argument("--ctr_rot_axis_name", type=str, default="Z",
+                    help="G-code axis label for rotation")
+    p.add_argument("--ctr_extruder_axis_name", type=str, default="E0",
+                    help="G-code axis label for extruder")
+    p.add_argument("--ctr_extruder_mm_per_mm", type=float, default=0.02,
+                    help="Extrusion per mm of tip travel")
+    p.add_argument("--ctr_extrusion_feedrate", type=float, default=600.0,
+                    help="Feedrate during extrusion (mm/min)")
+    p.add_argument("--ctr_jogging_feedrate", type=float, default=1200.0,
+                    help="Feedrate during jog moves (mm/min)")
+    p.add_argument("--ctr_needle_body_samples", type=int, default=20,
+                    help="Number of sample points along nitinol arc")
+
+    # --- Gimbal parameters ---
+    p.add_argument("--gimbal", action="store_true", default=False,
+                    help="Enable gimbal tilt for multi-angle collision avoidance")
+    p.add_argument("--no-gimbal", dest="gimbal", action="store_false",
+                    help="Disable gimbal tilt (default)")
+    p.add_argument("--gimbal-cone", type=float, default=15.0,
+                    help="Gimbal cone half-angle in degrees (default: 15)")
+    p.add_argument("--gimbal-tilt-levels", type=int, default=3,
+                    help="Number of tilt levels within the cone (default: 3)")
+    p.add_argument("--gimbal-azimuth", type=int, default=8,
+                    help="Number of azimuth samples per tilt level (default: 8)")
+
     # --- New flags (not in original) ---
     p.add_argument("--algorithm", type=str, default="dfs",
-                    choices=["dfs"],
+                    choices=["dfs", "swept_volume", "angular_sector"],
                     help="Pathfinding algorithm (default: dfs)")
+    p.add_argument("--ctr_num_sectors", type=int, default=8,
+                    help="Number of angular sectors for angular_sector algorithm (default: 8)")
     p.add_argument("--output_dir", type=str, default="outputs",
                     help="Output directory (default: outputs)")
 
@@ -174,6 +223,26 @@ def args_to_config(args: argparse.Namespace) -> XcavateConfig:
         positive_ink_start_venous=args.positiveInk_start_venous,
         positive_ink_end_arterial=args.positiveInk_end_arterial,
         positive_ink_end_venous=args.positiveInk_end_venous,
+        ctr_calibration_file=Path(args.ctr_calibration_file) if args.ctr_calibration_file else None,
+        ctr_position_cartesian=tuple(args.ctr_position_cartesian) if args.ctr_position_cartesian else None,
+        ctr_position_cylindrical=tuple(args.ctr_position_cylindrical) if args.ctr_position_cylindrical else None,
+        ctr_orientation=tuple(args.ctr_orientation),
+        ctr_radius=args.ctr_radius,
+        ctr_ss_max=args.ctr_ss_max,
+        ctr_ntnl_max=args.ctr_ntnl_max,
+        ctr_ss_axis_name=args.ctr_ss_axis_name,
+        ctr_ntnl_axis_name=args.ctr_ntnl_axis_name,
+        ctr_rot_axis_name=args.ctr_rot_axis_name,
+        ctr_extruder_axis_name=args.ctr_extruder_axis_name,
+        ctr_extruder_mm_per_mm=args.ctr_extruder_mm_per_mm,
+        ctr_extrusion_feedrate=args.ctr_extrusion_feedrate,
+        ctr_jogging_feedrate=args.ctr_jogging_feedrate,
+        ctr_needle_body_samples=args.ctr_needle_body_samples,
+        ctr_num_sectors=args.ctr_num_sectors,
+        gimbal_enabled=args.gimbal,
+        gimbal_cone_angle=args.gimbal_cone,
+        gimbal_n_tilt=args.gimbal_tilt_levels,
+        gimbal_n_azimuth=args.gimbal_azimuth,
         output_dir=Path(args.output_dir),
     )
 

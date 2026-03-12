@@ -126,6 +126,7 @@ with st.sidebar:
         "Pressure": PrinterType.PRESSURE,
         "Positive Ink": PrinterType.POSITIVE_INK,
         "Aerotech": PrinterType.AEROTECH,
+        "CTR": PrinterType.CTR,
     }
     printer_label = st.selectbox(
         "Printer type",
@@ -138,6 +139,12 @@ with st.sidebar:
     multimaterial = st.toggle(
         "Multimaterial", value=False,
         help="Enable two-nozzle arterial/venous printing. Requires a 5-column input file (x, y, z, radius, artven flag).",
+    )
+    gimbal_enabled = st.toggle(
+        "Gimbal", value=True,
+        help="Enable gimbal-based workspace expansion for CTR printing. "
+             "Tilts the insertion direction within a cone to reach fringe nodes. "
+             "Only applies when Printer type = CTR.",
     )
 
     # ------------------------------------------------------------------
@@ -155,7 +162,13 @@ with st.sidebar:
             help="Enable to provide custom G-code templates for header, "
                  "extrusion start/stop, pressure, and dwell sections.",
         )
-        algorithm = PathfindingAlgorithm.DFS
+        algorithm_name = st.selectbox(
+            "Pathfinding algorithm",
+            options=["dfs", "swept_volume"],
+            index=0,
+            help="DFS: modified depth-first search. Swept Volume: conflict-graph ordering to minimize body-drag collisions (CTR only).",
+        )
+        algorithm = PathfindingAlgorithm(algorithm_name)
         num_overlap = st.number_input(
             "Overlap nodes", min_value=0, value=0, step=1,
             help="Number of nodes to retrace at pass boundaries to bridge small gaps. Use 0 to disable.",
@@ -432,6 +445,111 @@ with st.sidebar:
             positive_ink_end_arterial = 0.0
             positive_ink_end_venous = 0.0
 
+    # -- CTR (Concentric Tube Robot) --
+    # Defaults always used unless user explicitly opts in to customize.
+    # Auto-optimize can override position/orientation from network geometry.
+    ctr_calibration_upload = None
+    ctr_position_cartesian = (0.0, 0.0, 0.0)
+    ctr_position_cylindrical = None
+    ctr_ori_x = 0.0
+    ctr_ori_y = -1.0
+    ctr_ori_z = 0.0
+    ctr_radius = 55.0
+    ctr_ss_max = 65.0
+    ctr_ntnl_max = 140.0
+    ctr_ss_axis_name = "X"
+    ctr_ntnl_axis_name = "Y"
+    ctr_rot_axis_name = "Z"
+    ctr_extruder_axis_name = "E0"
+    ctr_extruder_mm_per_mm = 0.02
+    ctr_extrusion_feedrate = 600.0
+    ctr_jogging_feedrate = 1200.0
+    ctr_needle_body_samples = 20
+    gimbal_cone_angle = 15.0
+    gimbal_n_tilt = 3
+    gimbal_n_azimuth = 8
+
+    # If auto-optimize has already run, use its results as defaults
+    if "ctr_auto_position" in st.session_state:
+        _auto_pos = st.session_state.ctr_auto_position
+        ctr_position_cartesian = tuple(_auto_pos.tolist())
+    if "ctr_auto_orientation" in st.session_state:
+        _auto_ori = st.session_state.ctr_auto_orientation
+        ctr_ori_x, ctr_ori_y, ctr_ori_z = float(_auto_ori[0]), float(_auto_ori[1]), float(_auto_ori[2])
+
+    with st.expander("CTR (Concentric Tube Robot)"):
+        st.caption("Only used when Printer type = CTR. Defaults are loaded automatically.")
+
+        # --- Auto-optimize placement ---
+        auto_optimize_ctr = st.checkbox(
+            "Auto-optimize CTR placement",
+            value=True,
+            key="ctr_auto_opt",
+            help="Automatically find the best CTR base position and orientation "
+                 "to maximize reachable nodes. Requires the network file to be "
+                 "uploaded above. Runs when the pipeline starts.",
+        )
+        if "ctr_auto_result" in st.session_state and st.session_state.ctr_auto_result is not None:
+            _res = st.session_state.ctr_auto_result
+            st.success(
+                f"Auto-placement: {_res['reachable_count']}/{_res['total_nodes']} "
+                f"nodes reachable ({100*_res['reachable_fraction']:.1f}%) "
+                f"from {_res['candidates_tested']} candidates"
+            )
+            _pos = _res["position"]
+            _ori = _res["orientation"]
+            st.caption(
+                f"Position: ({_pos[0]:.2f}, {_pos[1]:.2f}, {_pos[2]:.2f})  "
+                f"Orientation: ({_ori[0]:.3f}, {_ori[1]:.3f}, {_ori[2]:.3f})"
+            )
+
+        st.divider()
+        customize_ctr = st.checkbox("Customize CTR settings", value=False, key="ctr_customize")
+        if customize_ctr:
+            ctr_calibration_upload = st.file_uploader(
+                "Calibration file (.npy)", type=["npy"], key="ctr_cal",
+                help="Numpy .npy file with CTR calibration data (radial distance, arc parameter, ntnl-ss). Leave empty for default analytical calibration.",
+            )
+            ctr_coord_system = st.radio(
+                "Position coordinate system",
+                options=["Cartesian", "Cylindrical"],
+                index=0,
+                key="ctr_coord_sys",
+                help="Choose how to specify the CTR base position relative to the vascular network.",
+            )
+            if ctr_coord_system == "Cartesian":
+                _px_default = float(ctr_position_cartesian[0]) if ctr_position_cartesian else 0.0
+                _py_default = float(ctr_position_cartesian[1]) if ctr_position_cartesian else 0.0
+                _pz_default = float(ctr_position_cartesian[2]) if ctr_position_cartesian else 0.0
+                ctr_pos_x = st.number_input("CTR X (mm)", value=_px_default, step=1.0, format="%.2f", key="ctr_px")
+                ctr_pos_y = st.number_input("CTR Y (mm)", value=_py_default, step=1.0, format="%.2f", key="ctr_py")
+                ctr_pos_z = st.number_input("CTR Z (mm)", value=_pz_default, step=1.0, format="%.2f", key="ctr_pz")
+                ctr_position_cartesian = (ctr_pos_x, ctr_pos_y, ctr_pos_z)
+                ctr_position_cylindrical = None
+            else:
+                ctr_pos_r = st.number_input("CTR R (mm)", value=0.0, min_value=0.0, step=1.0, format="%.2f", key="ctr_pr")
+                ctr_pos_phi = st.number_input("CTR Phi (rad)", value=0.0, step=0.1, format="%.4f", key="ctr_pphi")
+                ctr_pos_z_cyl = st.number_input("CTR Z (mm)", value=0.0, step=1.0, format="%.2f", key="ctr_pz_cyl")
+                ctr_position_cartesian = None
+                ctr_position_cylindrical = (ctr_pos_r, ctr_pos_phi, ctr_pos_z_cyl)
+            ctr_ori_x = st.number_input("Orientation X", value=ctr_ori_x, step=0.1, format="%.2f", key="ctr_ox")
+            ctr_ori_y = st.number_input("Orientation Y", value=ctr_ori_y, step=0.1, format="%.2f", key="ctr_oy")
+            ctr_ori_z = st.number_input("Orientation Z", value=ctr_ori_z, step=0.1, format="%.2f", key="ctr_oz")
+            ctr_radius = st.number_input("Bend radius (mm)", value=55.0, min_value=0.1, step=1.0, format="%.1f", key="ctr_r")
+            ctr_ss_max = st.number_input("Max SS extension (mm)", value=65.0, min_value=0.1, step=5.0, format="%.1f", key="ctr_ss")
+            ctr_ntnl_max = st.number_input("Max nitinol extension (mm)", value=140.0, min_value=0.1, step=5.0, format="%.1f", key="ctr_ntnl")
+            ctr_ss_axis_name = st.text_input("SS axis name", value="X", key="ctr_ss_ax")
+            ctr_ntnl_axis_name = st.text_input("Nitinol axis name", value="Y", key="ctr_ntnl_ax")
+            ctr_rot_axis_name = st.text_input("Rotation axis name", value="Z", key="ctr_rot_ax")
+            ctr_extruder_axis_name = st.text_input("Extruder axis name", value="E0", key="ctr_ext_ax")
+            ctr_extruder_mm_per_mm = st.number_input("Extrusion per mm travel", value=0.02, min_value=0.0, step=0.005, format="%.4f", key="ctr_emm")
+            ctr_extrusion_feedrate = st.number_input("Extrusion feedrate (mm/min)", value=600.0, min_value=1.0, step=50.0, format="%.0f", key="ctr_ef")
+            ctr_jogging_feedrate = st.number_input("Jogging feedrate (mm/min)", value=1200.0, min_value=1.0, step=100.0, format="%.0f", key="ctr_jf")
+            ctr_needle_body_samples = st.number_input("Needle body samples", value=20, min_value=2, step=5, key="ctr_nbs")
+            st.markdown("**Gimbal**")
+            gimbal_cone_angle = st.number_input("Cone half-angle (deg)", value=15.0, min_value=0.0, step=1.0, format="%.1f", key="ctr_gimbal_cone")
+            gimbal_n_tilt = st.number_input("Tilt levels", value=3, min_value=1, step=1, key="ctr_gimbal_ntilt")
+            gimbal_n_azimuth = st.number_input("Azimuth samples", value=8, min_value=1, step=1, key="ctr_gimbal_nazi")
 
 
 # ---------------------------------------------------------------------------
@@ -496,6 +614,24 @@ def _build_config(
         speed_calc=speed_calc,
         close_sm=close_sm,
         close_mm=close_mm,
+        ctr_position_cartesian=ctr_position_cartesian,
+        ctr_position_cylindrical=ctr_position_cylindrical,
+        ctr_orientation=(ctr_ori_x, ctr_ori_y, ctr_ori_z),
+        ctr_radius=ctr_radius,
+        ctr_ss_max=ctr_ss_max,
+        ctr_ntnl_max=ctr_ntnl_max,
+        ctr_ss_axis_name=ctr_ss_axis_name,
+        ctr_ntnl_axis_name=ctr_ntnl_axis_name,
+        ctr_rot_axis_name=ctr_rot_axis_name,
+        ctr_extruder_axis_name=ctr_extruder_axis_name,
+        ctr_extruder_mm_per_mm=ctr_extruder_mm_per_mm,
+        ctr_extrusion_feedrate=ctr_extrusion_feedrate,
+        ctr_jogging_feedrate=ctr_jogging_feedrate,
+        ctr_needle_body_samples=ctr_needle_body_samples,
+        gimbal_enabled=gimbal_enabled,
+        gimbal_cone_angle=gimbal_cone_angle,
+        gimbal_n_tilt=gimbal_n_tilt,
+        gimbal_n_azimuth=gimbal_n_azimuth,
         output_dir=output_dir,
     )
 
@@ -799,15 +935,29 @@ with main_tab:
             if close_mm_delta_upload is not None:
                 (extension_dir / "deltas_to_extend_MM.txt").write_bytes(close_mm_delta_upload.getvalue())
 
+        # Save CTR calibration file (if uploaded)
+        ctr_cal_path = None
+        if ctr_calibration_upload is not None:
+            ctr_cal_path = input_dir / "ctr_calibration.npy"
+            ctr_cal_path.write_bytes(ctr_calibration_upload.getvalue())
+
         # Build config
         try:
             config = _build_config(network_path, inletoutlet_path, output_dir)
             # Point custom_gcode_dir to the temp directory where we wrote the files
             config.custom_gcode_dir = custom_dir
             config.extension_dir = extension_dir
+            if ctr_cal_path is not None:
+                config.ctr_calibration_file = ctr_cal_path
         except Exception as exc:
             st.error(f"Invalid configuration: {exc}")
             st.stop()
+
+        # Enable CTR auto-placement if selected and not manually customized
+        if (config.printer_type == PrinterType.CTR
+                and st.session_state.get("ctr_auto_opt", True)
+                and not st.session_state.get("ctr_customize", False)):
+            config.ctr_auto_place = True
 
         # Progress bar and status
         progress_bar = st.progress(0, text="Initializing...")
@@ -919,6 +1069,114 @@ with main_tab:
                 )
         else:
             st.info("Plot generation was disabled. Enable it in the Advanced section to see visualizations.")
+
+        # --------------------------------------------------------------
+        # CTR Needle Simulation
+        # --------------------------------------------------------------
+        if (config_saved.printer_type == PrinterType.CTR
+                and result.get("print_passes_sm") is not None
+                and result.get("ctr_config_params") is not None):
+
+            st.divider()
+            st.subheader("CTR Needle Simulation")
+
+            from xcavate.viz.ctr_simulation import (
+                create_ctr_simulation,
+                create_ctr_simulation_all_passes,
+                build_fallback_solutions,
+            )
+
+            passes = result["print_passes_sm"]
+            pts = result["points"]
+            ctr_params = result["ctr_config_params"]
+
+            # Get or build gimbal solutions
+            solutions = result.get("gimbal_solutions")
+            if solutions is None:
+                if "sim_fallback_solutions" not in st.session_state:
+                    st.session_state.sim_fallback_solutions = build_fallback_solutions(
+                        passes, pts, ctr_params,
+                    )
+                solutions = st.session_state.sim_fallback_solutions
+
+            # Simulation mode
+            sim_mode = st.radio(
+                "Simulation mode",
+                ["All passes", "Single pass"],
+                index=0,
+                horizontal=True,
+                key="sim_mode",
+            )
+
+            # Pass selector (only for single-pass mode)
+            sim_pass_idx = None
+            if sim_mode == "Single pass":
+                pass_keys = sorted(passes.keys())
+                sim_pass_idx = st.selectbox(
+                    "Select pass to simulate",
+                    pass_keys,
+                    format_func=lambda k: f"Pass {k} ({len(passes[k])} nodes)",
+                    key="sim_pass_select",
+                )
+
+            # Animation controls
+            sim_cols = st.columns(3)
+            with sim_cols[0]:
+                _default_frames = 300 if sim_mode == "All passes" else 200
+                max_frames = st.slider("Max frames", 50, 500, _default_frames, key="sim_max_frames")
+            with sim_cols[1]:
+                frame_duration = st.slider("Frame speed (ms)", 20, 200, 50, key="sim_frame_speed")
+            with sim_cols[2]:
+                trail_points = st.slider("Trail detail", 1000, 50000, 20000, key="sim_trail_pts")
+
+            if st.button("Generate Simulation", key="sim_generate"):
+                with st.spinner("Building animation frames..."):
+                    from xcavate.core.ctr_kinematics import CTRConfig
+
+                    ctr_config_obj = CTRConfig.from_xcavate_config(config_saved)
+
+                    if sim_mode == "All passes":
+                        fig_sim = create_ctr_simulation_all_passes(
+                            print_passes=passes,
+                            points=pts,
+                            gimbal_solutions=solutions,
+                            ctr_base=ctr_config_obj.X,
+                            R_hat_base=ctr_config_obj.R_hat,
+                            radius=ctr_config_obj.radius,
+                            n_hat_base=ctr_config_obj.n_hat,
+                            theta_match=ctr_config_obj.theta_match,
+                            max_frames=max_frames,
+                            trail_max_points=trail_points,
+                        )
+                    else:
+                        fig_sim = create_ctr_simulation(
+                            print_pass=passes[sim_pass_idx],
+                            points=pts,
+                            gimbal_solutions=solutions,
+                            ctr_base=ctr_config_obj.X,
+                            R_hat_base=ctr_config_obj.R_hat,
+                            radius=ctr_config_obj.radius,
+                            n_hat_base=ctr_config_obj.n_hat,
+                            theta_match=ctr_config_obj.theta_match,
+                            max_frames=max_frames,
+                            trail_max_points=trail_points,
+                        )
+                    # Update frame duration
+                    fig_sim.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = frame_duration
+
+                    st.session_state.sim_figure = fig_sim
+
+            if "sim_figure" in st.session_state and st.session_state.sim_figure is not None:
+                st.plotly_chart(st.session_state.sim_figure, use_container_width=True)
+                st.download_button(
+                    label="Download Simulation (HTML)",
+                    data=st.session_state.sim_figure.to_html(
+                        full_html=True, include_plotlyjs="cdn",
+                    ).encode("utf-8"),
+                    file_name="ctr_simulation.html",
+                    mime="text/html",
+                    key="dl_sim_html",
+                )
 
         # --------------------------------------------------------------
         # Downloads

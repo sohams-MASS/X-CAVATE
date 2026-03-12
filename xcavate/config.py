@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from enum import Enum
-from typing import Optional
+from typing import Optional, Tuple
 
 
 class PrinterType(Enum):
@@ -11,11 +11,14 @@ class PrinterType(Enum):
     PRESSURE = 0        # Pressure-based extrusion
     POSITIVE_INK = 1    # Positive ink displacement
     AEROTECH = 2        # Aerotech 6-axis controller
+    CTR = 3             # Concentric Tube Robot
 
 
 class PathfindingAlgorithm(Enum):
     """Available pathfinding strategies."""
     DFS = "dfs"                # Modified depth-first search (original algorithm)
+    SWEPT_VOLUME = "swept_volume"  # Swept-volume conflict graph ordering
+    ANGULAR_SECTOR = "angular_sector"  # Angular sector partitioning + Eades + greedy DFS
 
 
 class OverlapAlgorithm(Enum):
@@ -99,6 +102,34 @@ class XcavateConfig:
     positive_ink_start_venous: float = 0.0
     positive_ink_end_arterial: float = 0.0
     positive_ink_end_venous: float = 0.0
+
+    # --- CTR parameters (only used when printer_type == CTR) ---
+    ctr_calibration_file: Optional[Path] = None
+    ctr_position_cartesian: Optional[Tuple[float, float, float]] = None
+    ctr_position_cylindrical: Optional[Tuple[float, float, float]] = None
+    ctr_orientation: Tuple[float, float, float] = (0.0, -1.0, 0.0)
+    ctr_radius: float = 55.0                       # bend radius (mm)
+    ctr_ss_max: float = 65.0                        # max SS extension (mm)
+    ctr_ntnl_max: float = 140.0                     # max nitinol extension (mm)
+    ctr_ss_od: float = 4.0                          # SS tube outer diameter (mm)
+    ctr_ntnl_od: float = 1.6                        # nitinol tube outer diameter (mm)
+    ctr_auto_place: bool = False                    # auto-optimize CTR placement
+    ctr_ss_axis_name: str = "X"                     # G-code axis label for SS
+    ctr_ntnl_axis_name: str = "Y"                   # G-code axis label for nitinol
+    ctr_rot_axis_name: str = "Z"                    # G-code axis label for rotation
+    ctr_extruder_axis_name: str = "E0"              # G-code axis label for extruder
+    ctr_extruder_mm_per_mm: float = 0.02            # extrusion per mm travel
+    ctr_extrusion_feedrate: float = 600.0           # mm/min during extrusion
+    ctr_jogging_feedrate: float = 1200.0            # mm/min during jog
+    ctr_target_linear_feedrate: float = 500.0       # mm/min target tip speed
+    ctr_needle_body_samples: int = 20               # arc discretization
+    ctr_num_sectors: int = 8                         # angular sectors for ANGULAR_SECTOR algorithm
+
+    # --- Gimbal parameters (only used when printer_type == CTR) ---
+    gimbal_enabled: bool = False
+    gimbal_cone_angle: float = 15.0                  # cone half-angle (degrees)
+    gimbal_n_tilt: int = 3                           # tilt levels within cone
+    gimbal_n_azimuth: int = 8                        # azimuth samples per tilt level
 
     # --- Paths ---
     custom_gcode_dir: Path = field(default_factory=lambda: Path("inputs/custom"))
