@@ -780,10 +780,10 @@ def remove_artifact_passes(
         New print passes dict with artifact passes removed and keys
         re-indexed sequentially from 0.
     """
-    to_remove = [
+    to_remove = {
         i for i in print_passes
         if print_passes[i][0] == arbitrary_val
-    ]
+    }
     for i in to_remove:
         logger.debug("Removing artifact pass %d", i)
 

@@ -156,57 +156,192 @@ def run_xcavate(
     ctr_config = None
 
     # ── Step 3b: CTR auto-placement and reachability filtering ──────────
+    ctr_configs_multi = None       # list of CTRConfig for multi-CTR
+    node_assignments = None        # per-robot node sets
+    shared_state = None            # SharedVisitedState for multi-CTR
+    per_robot_passes = None        # per-robot pass dicts
+    per_robot_solutions = None     # per-robot gimbal solutions
+    pass_robot_map = None          # unified pass_idx -> robot_idx
+
     if config.printer_type == PrinterType.CTR:
-        # Auto-optimize placement if enabled (runs on interpolated points)
-        if config.ctr_auto_place:
-            from xcavate.core.ctr_placement import optimize_ctr_placement
-            _progress(3, "Auto-optimizing CTR placement")
-            opt = optimize_ctr_placement(
-                points_xyz,
-                radius=config.ctr_radius,
-                ss_lim=config.ctr_ss_max,
-                ntnl_lim=config.ctr_ntnl_max,
-                calibration_file=config.ctr_calibration_file,
-            )
-            config.ctr_position_cartesian = tuple(opt["position"].tolist())
-            config.ctr_position_cylindrical = None
-            config.ctr_orientation = tuple(opt["orientation"].tolist())
-            logger.info(
-                "CTR auto-placement: %d/%d reachable (%.1f%%) at position %s",
-                opt["reachable_count"], opt["total_nodes"],
-                100 * opt["reachable_fraction"], opt["position"],
-            )
-
         from xcavate.core.ctr_kinematics import CTRConfig, batch_is_reachable
-        ctr_config = CTRConfig.from_xcavate_config(config)
-        graph_nodes = np.array(sorted(graph.keys()), dtype=np.intp)
 
-        if config.gimbal_enabled:
-            from xcavate.core.gimbal_solver import gimbal_reachable_nodes
-            reachable_mask = gimbal_reachable_nodes(
-                points_xyz, graph_nodes, ctr_config,
-                config.gimbal_cone_angle, config.gimbal_n_tilt, config.gimbal_n_azimuth,
+        if config.n_robots > 1:
+            # ── Multi-CTR path ──
+            from xcavate.core.multi_ctr import (
+                assign_nodes_to_robots,
+                build_robot_configs,
+                extract_robot_subgraph,
+                merge_robot_passes,
+                merge_robot_solutions,
+                build_pass_robot_map,
             )
-        else:
-            reachable_mask = batch_is_reachable(points_xyz[graph_nodes], ctr_config)
+            from xcavate.core.ctr_collision import SharedVisitedState as _SVS
+            from xcavate.core.gimbal_solver import (
+                gimbal_reachable_nodes,
+                run_multi_robot_gimbal_solver,
+            )
 
-        unreachable = set(graph_nodes[~reachable_mask])
-        if unreachable:
-            msg = f"CTR: {len(unreachable)} nodes outside workspace, removed from graph"
-            logger.warning(msg)
-            warnings.append(msg)
-            for n in unreachable:
-                graph.pop(n, None)
-            for nbrs in graph.values():
-                for u in unreachable:
-                    if u in nbrs:
-                        nbrs.remove(u)
+            # 1. Build per-robot CTRConfigs
+            if config.ctr_auto_place:
+                if config.ctr_oracle_orient:
+                    from xcavate.core.ctr_placement import oracle_multi_ctr_placement
+                    _progress(3, f"Oracle-optimizing placement for {config.n_robots} CTRs")
+                    placements = oracle_multi_ctr_placement(
+                        points_xyz, config.n_robots,
+                        radius=config.ctr_radius,
+                        ss_lim=config.ctr_ss_max,
+                        ntnl_lim=config.ctr_ntnl_max,
+                        calibration_file=config.ctr_calibration_file,
+                    )
+                else:
+                    from xcavate.core.ctr_placement import optimize_multi_ctr_placement
+                    _progress(3, f"Auto-optimizing placement for {config.n_robots} CTRs")
+                    placements = optimize_multi_ctr_placement(
+                        points_xyz, config.n_robots,
+                        radius=config.ctr_radius,
+                        ss_lim=config.ctr_ss_max,
+                        ntnl_lim=config.ctr_ntnl_max,
+                        calibration_file=config.ctr_calibration_file,
+                        clearance=config.inter_robot_clearance,
+                    )
+                # Build robot dicts from placement results
+                auto_dicts = []
+                for p in placements:
+                    auto_dicts.append({
+                        "position_cartesian": tuple(p["position"].tolist()),
+                        "orientation": tuple(p["orientation"].tolist()),
+                    })
+                config.multi_ctr_configs = auto_dicts
+                # Also set base config for first robot
+                config.ctr_position_cartesian = auto_dicts[0]["position_cartesian"]
+                config.ctr_position_cylindrical = None
+                config.ctr_orientation = auto_dicts[0]["orientation"]
+
+            ctr_configs_multi = build_robot_configs(config)
+            ctr_config = ctr_configs_multi[0]  # primary for return dict
+
+            # 2. Reachability filtering (union across all robots)
+            graph_nodes = np.array(sorted(graph.keys()), dtype=np.intp)
+            combined_reachable = np.zeros(len(graph_nodes), dtype=np.bool_)
+            for cfg in ctr_configs_multi:
+                if config.gimbal_enabled:
+                    combined_reachable |= gimbal_reachable_nodes(
+                        points_xyz, graph_nodes, cfg,
+                        config.gimbal_cone_angle, config.gimbal_n_tilt,
+                        config.gimbal_n_azimuth,
+                    )
+                else:
+                    combined_reachable |= batch_is_reachable(
+                        points_xyz[graph_nodes], cfg,
+                    )
+
+            unreachable = set(graph_nodes[~combined_reachable])
+            if unreachable:
+                msg = f"Multi-CTR: {len(unreachable)} nodes outside all workspaces, removed"
+                logger.warning(msg)
+                warnings.append(msg)
+                for n in unreachable:
+                    graph.pop(n, None)
+                # Filter neighbor lists in one pass (O(total_edges), not O(unreachable × nodes))
+                for node in graph:
+                    graph[node] = [n for n in graph[node] if n not in unreachable]
+
+            # 3. Assign nodes to robots (with gimbal-expanded reachability)
+            _progress(4, f"Assigning nodes to {config.n_robots} robots")
+            gimbal_cfgs_for_assign = None
+            if config.gimbal_enabled:
+                from xcavate.core.oracle import _build_gimbal_configs
+                gimbal_cfgs_for_assign = [
+                    _build_gimbal_configs(
+                        cfg, config.gimbal_cone_angle,
+                        config.gimbal_n_tilt, config.gimbal_n_azimuth,
+                    )
+                    for cfg in ctr_configs_multi
+                ]
+            node_assignments = assign_nodes_to_robots(
+                points_xyz, graph, ctr_configs_multi,
+                gimbal_configs=gimbal_cfgs_for_assign,
+                clearance=config.inter_robot_clearance,
+            )
+
+            # 4. Create shared state
+            shared_state = _SVS(
+                len(points_xyz), points_xyz,
+                ss_od=config.ctr_ss_od,
+                ntnl_od=config.ctr_ntnl_od,
+            )
+
+            # 5. Run multi-robot gimbal solver
+            _progress(4, f"Running {config.n_robots}-robot gimbal solver")
+            per_robot_passes, per_robot_solutions = run_multi_robot_gimbal_solver(
+                graph, points_xyz, ctr_configs_multi,
+                node_assignments, shared_state,
+                nozzle_radius=config.nozzle_radius,
+                cone_angle_deg=config.gimbal_cone_angle,
+                n_tilt=config.gimbal_n_tilt,
+                n_azimuth=config.gimbal_n_azimuth,
+                n_arc_samples=config.ctr_needle_body_samples,
+                n_sectors=config.ctr_num_sectors,
+                execution_mode=config.multi_ctr_execution,
+            )
+
+            # 6. Merge into unified pass/solution dicts
+            pass_robot_map = build_pass_robot_map(per_robot_passes)
+
+        else:
+            # ── Single-CTR path (existing behavior) ──
+            if config.ctr_auto_place:
+                from xcavate.core.ctr_placement import optimize_ctr_placement
+                _progress(3, "Auto-optimizing CTR placement")
+                opt = optimize_ctr_placement(
+                    points_xyz,
+                    radius=config.ctr_radius,
+                    ss_lim=config.ctr_ss_max,
+                    ntnl_lim=config.ctr_ntnl_max,
+                    calibration_file=config.ctr_calibration_file,
+                )
+                config.ctr_position_cartesian = tuple(opt["position"].tolist())
+                config.ctr_position_cylindrical = None
+                config.ctr_orientation = tuple(opt["orientation"].tolist())
+                logger.info(
+                    "CTR auto-placement: %d/%d reachable (%.1f%%) at position %s",
+                    opt["reachable_count"], opt["total_nodes"],
+                    100 * opt["reachable_fraction"], opt["position"],
+                )
+
+            ctr_config = CTRConfig.from_xcavate_config(config)
+            graph_nodes = np.array(sorted(graph.keys()), dtype=np.intp)
+
+            if config.gimbal_enabled:
+                from xcavate.core.gimbal_solver import gimbal_reachable_nodes
+                reachable_mask = gimbal_reachable_nodes(
+                    points_xyz, graph_nodes, ctr_config,
+                    config.gimbal_cone_angle, config.gimbal_n_tilt, config.gimbal_n_azimuth,
+                )
+            else:
+                reachable_mask = batch_is_reachable(points_xyz[graph_nodes], ctr_config)
+
+            unreachable = set(graph_nodes[~reachable_mask])
+            if unreachable:
+                msg = f"CTR: {len(unreachable)} nodes outside workspace, removed from graph"
+                logger.warning(msg)
+                warnings.append(msg)
+                for n in unreachable:
+                    graph.pop(n, None)
+                for node in graph:
+                    graph[node] = [n for n in graph[node] if n not in unreachable]
 
     # ── Step 4: Generate print passes ────────────────────────────────────
     _progress(4, "Generating collision-free print passes")
 
     gimbal_solutions = None
-    if config.gimbal_enabled and config.printer_type == PrinterType.CTR:
+    if config.n_robots > 1 and config.printer_type == PrinterType.CTR:
+        # Multi-CTR: passes already generated above
+        from xcavate.core.multi_ctr import merge_robot_passes, merge_robot_solutions
+        raw_passes = merge_robot_passes(per_robot_passes)
+        gimbal_solutions = merge_robot_solutions(per_robot_solutions)
+    elif config.gimbal_enabled and config.printer_type == PrinterType.CTR:
         from xcavate.core.gimbal_solver import run_gimbal_solver
         raw_passes, gimbal_solutions = run_gimbal_solver(
             graph, points_xyz, ctr_config, config.nozzle_radius,
@@ -361,19 +496,55 @@ def run_xcavate(
     gap_ext_mm = _load_gap_extensions(config, "MM") if config.close_mm else None
 
     # G-code: single material
-    writer = _create_gcode_writer(config, custom_codes)
-    sm_gcode_kwargs = dict(
-        speed_map=speed_map_sm,
-        gap_extensions=gap_ext_sm,
-        network_top=network_top,
-    )
-    if gimbal_solutions is not None:
-        sm_gcode_kwargs['gimbal_solutions'] = gimbal_solutions
-    writer.write(
-        config.gcode_dir / f"gcode_SM_{config.printer_type.name.lower()}.txt",
-        print_passes_sm, points_interp,
-        **sm_gcode_kwargs,
-    )
+    if config.n_robots > 1 and config.printer_type == PrinterType.CTR:
+        # Multi-CTR: write per-robot G-code files
+        from xcavate.io.gcode.ctr import CTRGcodeWriter
+        for robot_idx, robot_config in enumerate(ctr_configs_multi):
+            robot_passes = per_robot_passes.get(robot_idx, {})
+            robot_solutions = per_robot_solutions.get(robot_idx, {})
+            if not robot_passes:
+                continue
+            writer = CTRGcodeWriter(config, custom_codes, ctr_config_override=robot_config)
+            gcode_kwargs = dict(
+                network_top=network_top,
+            )
+            if robot_solutions:
+                gcode_kwargs['gimbal_solutions'] = robot_solutions
+            writer.write(
+                config.gcode_dir / f"gcode_SM_ctr_robot{robot_idx}.txt",
+                robot_passes, points_interp,
+                **gcode_kwargs,
+            )
+            logger.info("Wrote G-code for robot %d: %d passes", robot_idx, len(robot_passes))
+
+        # Also write a unified G-code file (all robots merged)
+        writer = _create_gcode_writer(config, custom_codes)
+        sm_gcode_kwargs = dict(
+            speed_map=speed_map_sm,
+            gap_extensions=gap_ext_sm,
+            network_top=network_top,
+        )
+        if gimbal_solutions is not None:
+            sm_gcode_kwargs['gimbal_solutions'] = gimbal_solutions
+        writer.write(
+            config.gcode_dir / f"gcode_SM_{config.printer_type.name.lower()}.txt",
+            print_passes_sm, points_interp,
+            **sm_gcode_kwargs,
+        )
+    else:
+        writer = _create_gcode_writer(config, custom_codes)
+        sm_gcode_kwargs = dict(
+            speed_map=speed_map_sm,
+            gap_extensions=gap_ext_sm,
+            network_top=network_top,
+        )
+        if gimbal_solutions is not None:
+            sm_gcode_kwargs['gimbal_solutions'] = gimbal_solutions
+        writer.write(
+            config.gcode_dir / f"gcode_SM_{config.printer_type.name.lower()}.txt",
+            print_passes_sm, points_interp,
+            **sm_gcode_kwargs,
+        )
 
     # G-code: multimaterial
     if print_passes_mm is not None:
@@ -394,7 +565,7 @@ def run_xcavate(
     logger.info("X-CAVATE completed in %.1f seconds", elapsed)
     print(f"\nX-CAVATE completed in {elapsed:.1f}s. Output in {config.output_dir}/")
 
-    return {
+    result = {
         "print_passes_sm": print_passes_sm,
         "print_passes_mm": print_passes_mm,
         "points": points_interp,
@@ -417,6 +588,30 @@ def run_xcavate(
             "ntnl_lim": ctr_config.ntnl_lim,
         } if ctr_config is not None else None,
     }
+
+    # Multi-CTR additional outputs
+    if config.n_robots > 1 and config.printer_type == PrinterType.CTR:
+        result["n_robots"] = config.n_robots
+        result["per_robot_passes"] = per_robot_passes
+        result["per_robot_solutions"] = per_robot_solutions
+        result["node_assignments"] = {
+            r: sorted(nodes) for r, nodes in (node_assignments or {}).items()
+        }
+        result["pass_robot_map"] = pass_robot_map
+        result["ctr_configs_multi"] = [
+            {
+                "X": cfg.X.tolist(),
+                "R_hat": cfg.R_hat.tolist(),
+                "n_hat": cfg.n_hat.tolist(),
+                "theta_match": float(cfg.theta_match),
+                "radius": cfg.radius,
+                "ss_lim": cfg.ss_lim,
+                "ntnl_lim": cfg.ntnl_lim,
+            }
+            for cfg in (ctr_configs_multi or [])
+        ]
+
+    return result
 
 
 # ---------------------------------------------------------------------------

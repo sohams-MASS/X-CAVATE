@@ -139,6 +139,81 @@ class CTRConfig:
             ntnl_lim=config.ctr_ntnl_max,
         )
 
+    @classmethod
+    def from_robot_dict(
+        cls,
+        base_config: "CTRConfig",
+        robot_dict: dict,
+    ) -> "CTRConfig":
+        """Construct a CTRConfig by merging per-robot overrides with a base config.
+
+        Parameters
+        ----------
+        base_config : CTRConfig
+            Shared base configuration (calibration, radius, limits).
+        robot_dict : dict
+            Per-robot overrides.  Supported keys:
+
+            - ``position_cartesian``: ``(x, y, z)`` tuple
+            - ``position_cylindrical``: ``(r, phi, z)`` tuple
+            - ``orientation``: ``(rx, ry, rz)`` tuple (insertion direction)
+            - ``calibration_file``: path to ``.npy`` calibration
+            - ``radius``: bend radius override (mm)
+            - ``ss_max``: SS extension limit override (mm)
+            - ``ntnl_max``: nitinol extension limit override (mm)
+
+        Returns
+        -------
+        CTRConfig
+        """
+        # --- Position ---
+        if "position_cartesian" in robot_dict:
+            X = np.array(robot_dict["position_cartesian"], dtype=np.float64)
+        elif "position_cylindrical" in robot_dict:
+            r, phi, z = robot_dict["position_cylindrical"]
+            X = np.array([z, r * np.cos(phi), r * np.sin(phi)], dtype=np.float64)
+        else:
+            X = base_config.X.copy()
+
+        # --- Orientation ---
+        if "orientation" in robot_dict:
+            R_vec = np.array(robot_dict["orientation"], dtype=np.float64)
+            R_hat = R_vec / np.linalg.norm(R_vec)
+        else:
+            R_hat = base_config.R_hat.copy()
+
+        n_hat = _perpendicular_unit(R_hat)
+        theta_match = float(np.arctan2(
+            np.dot(np.cross(n_hat, np.array([1.0, 0.0, 0.0])), R_hat),
+            np.dot(n_hat, np.array([1.0, 0.0, 0.0])),
+        ))
+
+        # --- Calibration ---
+        radius = robot_dict.get("radius", base_config.radius)
+        cal_file = robot_dict.get("calibration_file", None)
+        if cal_file is not None:
+            f_xr_yr, f_yr_ntnlss, x_val = _load_calibration(cal_file, radius)
+        else:
+            f_xr_yr = base_config.f_xr_yr
+            f_yr_ntnlss = base_config.f_yr_ntnlss
+            x_val = base_config.x_val
+
+        ss_lim = robot_dict.get("ss_max", base_config.ss_lim)
+        ntnl_lim = robot_dict.get("ntnl_max", base_config.ntnl_lim)
+
+        return cls(
+            X=X,
+            R_hat=R_hat,
+            n_hat=n_hat,
+            theta_match=theta_match,
+            radius=radius,
+            f_xr_yr=f_xr_yr,
+            f_yr_ntnlss=f_yr_ntnlss,
+            x_val=x_val,
+            ss_lim=ss_lim,
+            ntnl_lim=ntnl_lim,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Rotation and coordinate transforms

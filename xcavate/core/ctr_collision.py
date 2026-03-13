@@ -34,6 +34,7 @@ Collision rules
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 
 import numpy as np
@@ -52,6 +53,161 @@ logger = logging.getLogger(__name__)
 # Type alias matching pathfinding.py
 Graph = Dict[int, List[int]]
 
+
+# ---------------------------------------------------------------------------
+# Robot footprint for inter-robot collision avoidance
+# ---------------------------------------------------------------------------
+
+@dataclass
+class RobotFootprint:
+    """Physical envelope of a robot at a given state."""
+
+    robot_idx: int
+    ctr_config: CTRConfig
+    body_points: NDArray[np.floating]  # (M, 3) sample points along needle
+    body_tree: cKDTree                 # spatial index over body_points
+
+    @classmethod
+    def from_retracted(
+        cls,
+        robot_idx: int,
+        config: CTRConfig,
+        n_samples: int = 20,
+    ) -> "RobotFootprint":
+        """Footprint of a retracted (idle) robot — SS tube only at min extension."""
+        min_ss = 1.0  # mm, minimum retracted extension
+        ss_pts = np.linspace(0, min_ss, n_samples)
+        body = config.X + ss_pts[:, None] * config.R_hat
+        return cls(
+            robot_idx=robot_idx,
+            ctr_config=config,
+            body_points=body,
+            body_tree=cKDTree(body),
+        )
+
+    @classmethod
+    def from_active(
+        cls,
+        robot_idx: int,
+        config: CTRConfig,
+        z_ss: float,
+        z_ntnl: float,
+        theta: float,
+        n_arc_samples: int = 20,
+    ) -> "RobotFootprint":
+        """Footprint of robot actively printing a specific node."""
+        body = compute_needle_body(z_ss, z_ntnl, theta, config, n_arc_samples)
+        return cls(
+            robot_idx=robot_idx,
+            ctr_config=config,
+            body_points=body,
+            body_tree=cKDTree(body),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Shared visited state for multi-robot coordination
+# ---------------------------------------------------------------------------
+
+class SharedVisitedState:
+    """Cross-robot visited/unvisited tracking.
+
+    All robots share a single visited set so that body-drag checks
+    account for material deposited by ANY robot, not just the current one.
+    """
+
+    def __init__(
+        self,
+        n_points: int,
+        points: NDArray[np.floating],
+        ss_od: float = 4.0,
+        ntnl_od: float = 1.6,
+    ) -> None:
+        self._points = points[:, :3].copy()
+        self._n_points = n_points
+        self._unvisited: Set[int] = set(range(n_points))
+        self._visited: Set[int] = set()
+        self._visited_by: Dict[int, int] = {}  # node -> robot_idx
+        self._rebuild_counter = 0
+        self._rebuild_interval = 500
+        # Shared KD-trees for body-drag checks
+        self._visited_tree: cKDTree | None = None
+        self._visited_indices: NDArray[np.intp] | None = None
+        # Robot footprints for inter-robot physical collision
+        self._robot_footprints: Dict[int, RobotFootprint] = {}
+        self._ss_od = ss_od
+        self._ntnl_od = ntnl_od
+
+    @property
+    def visited(self) -> Set[int]:
+        return self._visited
+
+    @property
+    def unvisited(self) -> Set[int]:
+        return self._unvisited
+
+    @property
+    def visited_by(self) -> Dict[int, int]:
+        return self._visited_by
+
+    def mark_visited(self, node: int, robot_idx: int) -> None:
+        """Mark a node as printed by a specific robot."""
+        self._unvisited.discard(node)
+        self._visited.add(node)
+        self._visited_by[node] = robot_idx
+        self._rebuild_counter += 1
+        if self._rebuild_counter >= self._rebuild_interval:
+            self._rebuild_visited_tree()
+
+    def get_visited_tree(self) -> cKDTree | None:
+        return self._visited_tree
+
+    def get_visited_indices(self) -> NDArray[np.intp] | None:
+        return self._visited_indices
+
+    def _rebuild_visited_tree(self) -> None:
+        """Rebuild the shared visited KD-tree."""
+        if self._visited:
+            v_idx = np.array(sorted(self._visited), dtype=np.intp)
+            self._visited_indices = v_idx
+            self._visited_tree = cKDTree(self._points[v_idx])
+        else:
+            self._visited_tree = None
+            self._visited_indices = None
+        self._rebuild_counter = 0
+        logger.debug(
+            "Shared visited KD-tree rebuilt: %d visited",
+            len(self._visited),
+        )
+
+    def set_robot_footprint(self, robot_idx: int, footprint: RobotFootprint) -> None:
+        """Update a robot's physical footprint (called when robot state changes)."""
+        self._robot_footprints[robot_idx] = footprint
+
+    def check_inter_robot_collision(
+        self,
+        body_points: NDArray[np.floating],
+        requesting_robot: int,
+        clearance: float = 2.0,
+    ) -> bool:
+        """Check if a needle body collides with any OTHER robot's footprint.
+
+        Returns True if collision detected. Uses combined tube radii + clearance
+        as the collision envelope.
+        """
+        collision_r = (self._ss_od + self._ntnl_od) / 2.0 + clearance
+        for ridx, footprint in self._robot_footprints.items():
+            if ridx == requesting_robot:
+                continue
+            hits = footprint.body_tree.query_ball_point(body_points, collision_r)
+            if any(len(h) > 0 for h in hits):
+                return True
+        return False
+
+
+# ---------------------------------------------------------------------------
+# CTR collision detector
+# ---------------------------------------------------------------------------
 
 class CTRCollisionDetector:
     """Collision detector that models the full curved CTR needle body.
@@ -87,6 +243,8 @@ class CTRCollisionDetector:
         tolerance_flag: bool = False,
         n_arc_samples: int = 20,
         rebuild_interval: int = 500,
+        shared_state: Optional[SharedVisitedState] = None,
+        robot_idx: int = 0,
     ) -> None:
         self._points = points[:, :3].copy()
         self._ctr_config = ctr_config
@@ -96,6 +254,8 @@ class CTRCollisionDetector:
         self._tolerance_flag = tolerance_flag
         self._n_arc_samples = n_arc_samples
         self._rebuild_interval = rebuild_interval
+        self._shared_state = shared_state
+        self._robot_idx = robot_idx
 
         self._n_total = points.shape[0]
         self._unvisited: Set[int] = set(range(self._n_total))
@@ -182,11 +342,26 @@ class CTRCollisionDetector:
                 return False
 
         # --- Batch drag check (visited) ---
-        if self._visited_tree is not None and len(self._visited) > 0:
-            drag_counts = self._visited_tree.query_ball_point(
+        # Use shared visited tree if available (multi-robot mode),
+        # otherwise fall back to local visited tree (single-robot mode).
+        drag_tree = None
+        if self._shared_state is not None:
+            drag_tree = self._shared_state.get_visited_tree()
+        elif self._visited_tree is not None and len(self._visited) > 0:
+            drag_tree = self._visited_tree
+
+        if drag_tree is not None:
+            drag_counts = drag_tree.query_ball_point(
                 far_body, collision_r, return_length=True,
             )
             if np.any(drag_counts > 0):
+                return False
+
+        # --- Inter-robot physical collision check ---
+        if self._shared_state is not None:
+            if self._shared_state.check_inter_robot_collision(
+                far_body, self._robot_idx,
+            ):
                 return False
 
         return True
@@ -196,6 +371,10 @@ class CTRCollisionDetector:
         self._unvisited.discard(node)
         self._visited.add(node)
         self._removals_since_rebuild += 1
+
+        # Delegate to shared state for cross-robot visibility
+        if self._shared_state is not None:
+            self._shared_state.mark_visited(node, self._robot_idx)
 
         if self._removals_since_rebuild >= self._rebuild_interval:
             self._rebuild_trees()
@@ -216,6 +395,27 @@ class CTRCollisionDetector:
     # ------------------------------------------------------------------ #
     # Internal                                                             #
     # ------------------------------------------------------------------ #
+
+    def bulk_init_visited(self, visited_nodes: Set[int]) -> None:
+        """Batch-initialize visited/unvisited sets without per-node KD-tree rebuilds.
+
+        Much faster than calling ``mark_visited()`` in a loop when a large
+        number of nodes must be pre-marked (e.g. multi-robot init where all
+        non-assigned nodes start as visited).
+        """
+        self._visited = visited_nodes.copy()
+        self._unvisited = set(range(self._n_total)) - self._visited
+
+        # Also update shared state (without triggering its incremental rebuilds)
+        if self._shared_state is not None:
+            for n in visited_nodes:
+                self._shared_state._visited.add(n)
+                self._shared_state._unvisited.discard(n)
+
+        # Single rebuild of both trees
+        self._rebuild_trees()
+        if self._shared_state is not None:
+            self._shared_state._rebuild_visited_tree()
 
     def _rebuild_trees(self) -> None:
         """Rebuild both KD-trees from current unvisited/visited sets."""

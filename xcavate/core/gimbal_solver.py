@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import numpy as np
 from numpy.typing import NDArray
 
-from xcavate.core.ctr_collision import CTRCollisionDetector
+from xcavate.core.ctr_collision import CTRCollisionDetector, SharedVisitedState, RobotFootprint
 from xcavate.core.ctr_kinematics import (
     CTRConfig,
     batch_is_reachable,
@@ -95,11 +95,14 @@ class GimbalSolverDetector(CTRCollisionDetector):
         cone_angle_deg: float = 15.0,
         n_tilt: int = 3,
         n_azimuth: int = 8,
+        shared_state: Optional[SharedVisitedState] = None,
+        robot_idx: int = 0,
     ) -> None:
         super().__init__(
             points, ctr_config, nozzle_radius,
             graph=graph, tolerance=tolerance, tolerance_flag=tolerance_flag,
             n_arc_samples=n_arc_samples, rebuild_interval=rebuild_interval,
+            shared_state=shared_state, robot_idx=robot_idx,
         )
         self._gimbal_configs = _build_gimbal_configs(
             ctr_config, cone_angle_deg, n_tilt, n_azimuth,
@@ -524,3 +527,122 @@ def gimbal_reachable_nodes(
         combined |= mask
 
     return combined
+
+
+# ---------------------------------------------------------------------------
+# Multi-robot gimbal solver
+# ---------------------------------------------------------------------------
+
+def run_multi_robot_gimbal_solver(
+    graph: Graph,
+    points: NDArray[np.floating],
+    ctr_configs: List[CTRConfig],
+    node_assignments: Dict[int, Set[int]],
+    shared_state: SharedVisitedState,
+    nozzle_radius: float,
+    cone_angle_deg: float = 15.0,
+    n_tilt: int = 3,
+    n_azimuth: int = 8,
+    n_arc_samples: int = 20,
+    n_sectors: int = 8,
+    execution_mode: str = "sequential",
+) -> Tuple[Dict[int, Dict[int, List[int]]], Dict[int, Dict[int, GimbalNodeSolution]]]:
+    """Run gimbal solver for N robots with shared collision state.
+
+    Sequential mode: processes robots one at a time. Each robot's detector
+    references shared_state for body-drag. After each robot finishes, all
+    its printed nodes are in shared_state, so the next robot's body-drag
+    checks account for them.
+
+    Robots are processed in order of assignment size (largest first), since
+    the first robot has the emptiest visited set and fewest constraints.
+
+    Parameters
+    ----------
+    graph : dict[int, list[int]]
+        Full adjacency list.
+    points : ndarray (N, 3)
+        Node coordinates.
+    ctr_configs : list of CTRConfig
+        One per robot.
+    node_assignments : dict[int, set[int]]
+        Per-robot node sets from ``assign_nodes_to_robots()``.
+    shared_state : SharedVisitedState
+    nozzle_radius : float
+    cone_angle_deg, n_tilt, n_azimuth, n_arc_samples, n_sectors
+        Gimbal + sector parameters.
+    execution_mode : str
+        ``"sequential"`` (default) or ``"parallel"``.
+
+    Returns
+    -------
+    tuple of (per_robot_passes, per_robot_solutions)
+        per_robot_passes: ``{robot_idx: {pass_idx: [nodes]}}``
+        per_robot_solutions: ``{robot_idx: {node: GimbalNodeSolution}}``
+    """
+    from xcavate.core.multi_ctr import extract_robot_subgraph
+
+    n_robots = len(ctr_configs)
+    per_robot_passes: Dict[int, Dict[int, List[int]]] = {}
+    per_robot_solutions: Dict[int, Dict[int, GimbalNodeSolution]] = {}
+
+    # Process order: largest assignment first (fewest constraints)
+    robot_order = sorted(
+        range(n_robots),
+        key=lambda r: len(node_assignments.get(r, set())),
+        reverse=True,
+    )
+
+    for robot_idx in robot_order:
+        assigned = node_assignments.get(robot_idx, set())
+        if not assigned:
+            logger.info("Robot %d: no nodes assigned, skipping", robot_idx)
+            per_robot_passes[robot_idx] = {}
+            per_robot_solutions[robot_idx] = {}
+            continue
+
+        # Build subgraph for this robot
+        subgraph = extract_robot_subgraph(graph, assigned)
+        if not subgraph:
+            logger.warning("Robot %d: empty subgraph, skipping", robot_idx)
+            per_robot_passes[robot_idx] = {}
+            per_robot_solutions[robot_idx] = {}
+            continue
+
+        # Set retracted footprint for this robot before starting
+        footprint = RobotFootprint.from_retracted(robot_idx, ctr_configs[robot_idx])
+        shared_state.set_robot_footprint(robot_idx, footprint)
+
+        # Create detector with shared state
+        detector = GimbalSolverDetector(
+            points, ctr_configs[robot_idx], nozzle_radius,
+            graph=subgraph, n_arc_samples=n_arc_samples,
+            cone_angle_deg=cone_angle_deg, n_tilt=n_tilt, n_azimuth=n_azimuth,
+            shared_state=shared_state, robot_idx=robot_idx,
+        )
+
+        # Bulk-initialize: mark all non-assigned nodes as visited in one shot
+        # (avoids O(N) mark_visited calls each triggering KD-tree rebuilds)
+        non_assigned = set(range(len(points))) - assigned
+        detector.bulk_init_visited(non_assigned)
+
+        # Run angular sector solver on this robot's subgraph
+        logger.info(
+            "Robot %d: running gimbal solver on %d nodes (%d subgraph edges)",
+            robot_idx, len(assigned), sum(len(v) for v in subgraph.values()),
+        )
+
+        passes, solutions = _run_angular_sector(
+            subgraph, points, ctr_configs[robot_idx], detector,
+            n_sectors, nozzle_radius, n_arc_samples,
+        )
+
+        per_robot_passes[robot_idx] = passes
+        per_robot_solutions[robot_idx] = solutions
+
+        logger.info(
+            "Robot %d: %d passes, %d/%d nodes solved",
+            robot_idx, len(passes), len(solutions), len(assigned),
+        )
+
+    return per_robot_passes, per_robot_solutions

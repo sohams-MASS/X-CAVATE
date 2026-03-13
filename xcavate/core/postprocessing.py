@@ -212,6 +212,8 @@ def reorder_passes_nearest_neighbor(
     pick the unvisited pass whose start point is closest to the current
     pass's end point.
 
+    Uses a KD-tree for O(N log N) performance instead of O(N²).
+
     Args:
         print_passes: Current passes.
         points: Coordinate array.
@@ -219,32 +221,47 @@ def reorder_passes_nearest_neighbor(
     Returns:
         Reordered passes with sequential indices.
     """
+    from scipy.spatial import cKDTree
+
     if len(print_passes) <= 1:
         return print_passes
 
     # Compute start/end coordinates for each pass
     pass_keys = sorted(print_passes.keys())
-    start_coords = {}
-    end_coords = {}
-    for k in pass_keys:
+    n = len(pass_keys)
+    start_arr = np.empty((n, 3))
+    end_arr = np.empty((n, 3))
+    for i, k in enumerate(pass_keys):
         nodes = print_passes[k]
-        start_coords[k] = points[nodes[0], :3]
-        end_coords[k] = points[nodes[-1], :3]
+        start_arr[i] = points[nodes[0], :3]
+        end_arr[i] = points[nodes[-1], :3]
 
-    # Greedy nearest-neighbor ordering
-    ordered = [pass_keys[0]]
-    remaining = set(pass_keys[1:])
+    # Build KD-tree over start coordinates
+    tree = cKDTree(start_arr)
 
-    while remaining:
-        current_end = end_coords[ordered[-1]]
-        best_key = None
-        best_dist = float("inf")
-        for k in remaining:
-            dist = np.linalg.norm(start_coords[k] - current_end)
-            if dist < best_dist:
-                best_dist = dist
-                best_key = k
-        ordered.append(best_key)
-        remaining.remove(best_key)
+    # Greedy nearest-neighbor ordering using KD-tree queries
+    visited = np.zeros(n, dtype=bool)
+    ordered_idx = [0]
+    visited[0] = True
 
-    return {i: print_passes[k] for i, k in enumerate(ordered)}
+    for _ in range(n - 1):
+        current_end = end_arr[ordered_idx[-1]]
+        # Query increasing numbers of neighbors until we find an unvisited one
+        k_query = min(32, n)
+        while True:
+            dists, idxs = tree.query(current_end, k=k_query)
+            if k_query == 1:
+                dists = [dists]
+                idxs = [idxs]
+            for d, idx in zip(dists, idxs):
+                if not visited[idx]:
+                    ordered_idx.append(idx)
+                    visited[idx] = True
+                    break
+            else:
+                # All k_query neighbors already visited, expand search
+                k_query = min(k_query * 2, n)
+                continue
+            break
+
+    return {i: print_passes[pass_keys[k]] for i, k in enumerate(ordered_idx)}

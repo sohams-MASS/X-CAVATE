@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class PrinterType(Enum):
@@ -124,6 +124,13 @@ class XcavateConfig:
     ctr_target_linear_feedrate: float = 500.0       # mm/min target tip speed
     ctr_needle_body_samples: int = 20               # arc discretization
     ctr_num_sectors: int = 8                         # angular sectors for ANGULAR_SECTOR algorithm
+
+    # --- Multi-CTR parameters (only used when printer_type == CTR) ---
+    n_robots: int = 1                                   # number of CTRs (1 = legacy single-CTR)
+    multi_ctr_configs: Optional[List[Dict]] = None      # per-robot overrides: position, orientation, etc.
+    multi_ctr_execution: str = "sequential"              # "sequential" or "parallel"
+    inter_robot_clearance: float = 2.0                   # mm, minimum clearance between robot needle bodies
+    ctr_oracle_orient: bool = False                         # oracle orientation optimisation for multi-CTR placement
 
     # --- Gimbal parameters (only used when printer_type == CTR) ---
     gimbal_enabled: bool = False

@@ -23,19 +23,35 @@ from xcavate.io.gcode.base import GcodeWriter
 
 
 class CTRGcodeWriter(GcodeWriter):
-    """G-code writer outputting SNT coordinates for a Concentric Tube Robot."""
+    """G-code writer outputting SNT coordinates for a Concentric Tube Robot.
 
-    def __init__(self, config, custom_codes=None):
+    Parameters
+    ----------
+    config : XcavateConfig
+    custom_codes : CustomCodes or None
+    ctr_config_override : CTRConfig or None
+        If provided, use this config instead of building from XcavateConfig.
+        Used for per-robot G-code in multi-CTR mode.
+    robot_idx : int
+        Robot index for multi-CTR sync markers (default 0).
+    """
+
+    def __init__(self, config, custom_codes=None, ctr_config_override=None, robot_idx=0):
         super().__init__(config, custom_codes)
+        self._ctr_config_override = ctr_config_override
         self._ctr_config: CTRConfig | None = None
         self._prev_theta: float = 0.0
         self._gimbal_solutions = None
         self._prev_config_idx: int = -1
         self._print_passes_ref = None
+        self._robot_idx = robot_idx
 
     def write(self, output_path, print_passes, points, **kwargs):
         """Override to initialize CTR config before writing."""
-        self._ctr_config = CTRConfig.from_xcavate_config(self.config)
+        if self._ctr_config_override is not None:
+            self._ctr_config = self._ctr_config_override
+        else:
+            self._ctr_config = CTRConfig.from_xcavate_config(self.config)
         self._prev_theta = 0.0
         self._gimbal_solutions = kwargs.pop('gimbal_solutions', None)
         self._prev_config_idx = -1
@@ -49,6 +65,9 @@ class CTRGcodeWriter(GcodeWriter):
     def _write_header(self, f: TextIO):
         cfg = self.config
         f.write(";=========== Begin CTR GCODE ============= \n")
+        if cfg.n_robots > 1:
+            f.write(f"; Robot {self._robot_idx} of {cfg.n_robots}\n")
+            f.write(f"; Execution mode: {cfg.multi_ctr_execution}\n")
         f.write(f"; Axis mapping: SS={cfg.ctr_ss_axis_name}, "
                 f"NTNL={cfg.ctr_ntnl_axis_name}, "
                 f"ROT={cfg.ctr_rot_axis_name}\n")
@@ -61,11 +80,16 @@ class CTRGcodeWriter(GcodeWriter):
         cfg = self.config
         f.write("G90 \n")
         # Retract: pull SS back to zero, nitinol back to zero
+        f.write(f"; RETRACT TO HOME\n")
         f.write(f"G1 {cfg.ctr_ss_axis_name}0 {cfg.ctr_ntnl_axis_name}0 "
                 f"F{cfg.ctr_jogging_feedrate}\n")
+        f.write(f"M400  ; wait for retraction complete\n")
         # Home gimbal if active
         if self._gimbal_solutions:
             f.write(f"G1 A0.000 B0.000 F{cfg.ctr_jogging_feedrate}\n")
+        # Multi-CTR end marker
+        if cfg.n_robots > 1:
+            f.write(f"; ROBOT {self._robot_idx} SIGNAL COMPLETE\n")
 
     # ------------------------------------------------------------------ #
     # Abstract method implementations
@@ -192,6 +216,10 @@ class CTRGcodeWriter(GcodeWriter):
         # Retract needle
         f.write(f"G90 G1 {cfg.ctr_ss_axis_name}0 {cfg.ctr_ntnl_axis_name}0 "
                 f"F{cfg.ctr_jogging_feedrate}\n")
+        # Multi-CTR sync marker
+        if cfg.n_robots > 1:
+            f.write(f"M400  ; wait for retraction complete\n")
+            f.write(f"; ROBOT {self._robot_idx} PASS COMPLETE\n")
 
     # ------------------------------------------------------------------ #
     # Helpers

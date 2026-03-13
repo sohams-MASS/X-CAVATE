@@ -468,6 +468,12 @@ with st.sidebar:
     gimbal_cone_angle = 15.0
     gimbal_n_tilt = 3
     gimbal_n_azimuth = 8
+    # Multi-CTR defaults
+    n_robots = 1
+    multi_ctr_execution = "sequential"
+    inter_robot_clearance = 2.0
+    multi_ctr_configs = None
+    oracle_orient = False
 
     # If auto-optimize has already run, use its results as defaults
     if "ctr_auto_position" in st.session_state:
@@ -551,6 +557,58 @@ with st.sidebar:
             gimbal_n_tilt = st.number_input("Tilt levels", value=3, min_value=1, step=1, key="ctr_gimbal_ntilt")
             gimbal_n_azimuth = st.number_input("Azimuth samples", value=8, min_value=1, step=1, key="ctr_gimbal_nazi")
 
+        # --- Multi-CTR ---
+        st.divider()
+        n_robots = st.number_input(
+            "Number of CTRs",
+            min_value=1, max_value=6, value=1, step=1,
+            key="n_robots",
+            help="Number of concurrent CTR robots. Set to 1 for single-robot mode (default).",
+        )
+        if n_robots > 1:
+            st.info(f"Multi-CTR mode: {n_robots} robots")
+            multi_ctr_execution = st.radio(
+                "Execution mode",
+                options=["sequential", "parallel"],
+                index=0,
+                key="multi_ctr_exec",
+                help="Sequential: robots print one at a time. Parallel: robots print simultaneously (requires inter-robot collision avoidance).",
+            )
+            inter_robot_clearance = st.number_input(
+                "Inter-robot clearance (mm)",
+                value=2.0, min_value=0.0, step=0.5, format="%.1f",
+                key="inter_robot_clearance",
+                help="Minimum clearance between robot needle bodies (mm).",
+            )
+            oracle_orient = st.checkbox(
+                "Oracle Orientation Optimization",
+                value=False,
+                key="oracle_orient",
+                help="PCA-guided + stochastic SO(3) search for the optimal orientation "
+                     "of the N-CTR arrangement. Searches the full 3D rotation space to "
+                     "maximize coverage and balance. Slower but finds better placements.",
+            )
+            # Per-robot position overrides
+            multi_ctr_configs = []
+            for i in range(n_robots):
+                with st.expander(f"Robot {i} Configuration", expanded=False):
+                    st.caption(f"Position/orientation overrides for robot {i}. Leave at defaults to use auto-placement.")
+                    r_px = st.number_input(f"R{i} X (mm)", value=0.0, step=1.0, format="%.2f", key=f"r{i}_px")
+                    r_py = st.number_input(f"R{i} Y (mm)", value=0.0, step=1.0, format="%.2f", key=f"r{i}_py")
+                    r_pz = st.number_input(f"R{i} Z (mm)", value=0.0, step=1.0, format="%.2f", key=f"r{i}_pz")
+                    r_ox = st.number_input(f"R{i} Ori X", value=0.0, step=0.1, format="%.2f", key=f"r{i}_ox")
+                    r_oy = st.number_input(f"R{i} Ori Y", value=-1.0, step=0.1, format="%.2f", key=f"r{i}_oy")
+                    r_oz = st.number_input(f"R{i} Ori Z", value=0.0, step=0.1, format="%.2f", key=f"r{i}_oz")
+                    robot_dict = {}
+                    if r_px != 0.0 or r_py != 0.0 or r_pz != 0.0:
+                        robot_dict["position_cartesian"] = (r_px, r_py, r_pz)
+                    if r_ox != 0.0 or r_oy != -1.0 or r_oz != 0.0:
+                        robot_dict["orientation"] = (r_ox, r_oy, r_oz)
+                    multi_ctr_configs.append(robot_dict)
+            # Filter out empty dicts
+            if all(not d for d in multi_ctr_configs):
+                multi_ctr_configs = None
+
 
 # ---------------------------------------------------------------------------
 # Helper: build config from sidebar state
@@ -632,6 +690,11 @@ def _build_config(
         gimbal_cone_angle=gimbal_cone_angle,
         gimbal_n_tilt=gimbal_n_tilt,
         gimbal_n_azimuth=gimbal_n_azimuth,
+        n_robots=n_robots,
+        multi_ctr_configs=multi_ctr_configs,
+        multi_ctr_execution=multi_ctr_execution,
+        inter_robot_clearance=inter_robot_clearance,
+        ctr_oracle_orient=oracle_orient if n_robots > 1 else False,
         output_dir=output_dir,
     )
 
@@ -1009,7 +1072,14 @@ with main_tab:
         st.subheader("3D Visualization")
 
         if config_saved.generate_plots:
-            from xcavate.viz.plotting import create_network_plot, create_original_network_plot
+            from xcavate.viz.plotting import (
+                create_network_plot,
+                create_network_plot_merged,
+                create_original_network_plot,
+            )
+
+            # Threshold: use merged single-trace plot for large pass counts
+            _MERGE_THRESHOLD = 100
 
             # Original network plot
             if result.get("points_original") is not None and result.get("coord_num_dict_original") is not None:
@@ -1031,11 +1101,19 @@ with main_tab:
             # Single-material plot
             if result.get("print_passes_sm") is not None and result.get("points") is not None:
                 st.markdown("**Single Material Print Passes**")
-                fig_sm = create_network_plot(
-                    result["print_passes_sm"],
-                    result["points"],
-                    title="Single Material",
-                )
+                _n_passes = len(result["print_passes_sm"])
+                if _n_passes > _MERGE_THRESHOLD:
+                    fig_sm = create_network_plot_merged(
+                        result["print_passes_sm"],
+                        result["points"],
+                        title="Single Material (merged)",
+                    )
+                else:
+                    fig_sm = create_network_plot(
+                        result["print_passes_sm"],
+                        result["points"],
+                        title="Single Material",
+                    )
                 st.plotly_chart(fig_sm, use_container_width=True)
                 st.download_button(
                     label="Download SM Print Passes (HTML)",
@@ -1089,6 +1167,7 @@ with main_tab:
             passes = result["print_passes_sm"]
             pts = result["points"]
             ctr_params = result["ctr_config_params"]
+            _n_result_robots = result.get("n_robots", 1)
 
             # Get or build gimbal solutions
             solutions = result.get("gimbal_solutions")
@@ -1099,84 +1178,274 @@ with main_tab:
                     )
                 solutions = st.session_state.sim_fallback_solutions
 
-            # Simulation mode
-            sim_mode = st.radio(
-                "Simulation mode",
-                ["All passes", "Single pass"],
-                index=0,
-                horizontal=True,
-                key="sim_mode",
-            )
+            # ----------------------------------------------------------
+            # Multi-CTR: show summary + per-robot and combined simulation
+            # ----------------------------------------------------------
+            if _n_result_robots > 1 and result.get("ctr_configs_multi"):
+                _robot_colors = [
+                    "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
+                ]
 
-            # Pass selector (only for single-pass mode)
-            sim_pass_idx = None
-            if sim_mode == "Single pass":
-                pass_keys = sorted(passes.keys())
-                sim_pass_idx = st.selectbox(
-                    "Select pass to simulate",
-                    pass_keys,
-                    format_func=lambda k: f"Pass {k} ({len(passes[k])} nodes)",
-                    key="sim_pass_select",
+                # Summary cards
+                st.markdown(f"**{_n_result_robots} Robots** — sequential execution")
+                _assignments = result.get("node_assignments", {})
+                _prp = result.get("per_robot_passes", {})
+                summary_cols = st.columns(min(_n_result_robots, 6))
+                for ridx in range(_n_result_robots):
+                    with summary_cols[ridx % len(summary_cols)]:
+                        color = _robot_colors[ridx % len(_robot_colors)]
+                        n_assigned = len(_assignments.get(ridx, []))
+                        n_passes = len(_prp.get(ridx, {}))
+                        n_solved = len(result.get("per_robot_solutions", {}).get(ridx, {}))
+                        _cfg = result["ctr_configs_multi"][ridx] if ridx < len(result["ctr_configs_multi"]) else {}
+                        _pos_str = ""
+                        if _cfg:
+                            _pos_str = f"Pos: ({_cfg['X'][0]:.1f}, {_cfg['X'][1]:.1f}, {_cfg['X'][2]:.1f})"
+                        st.markdown(
+                            f"<div style='border-left: 4px solid {color}; padding-left: 8px; margin-bottom: 8px;'>"
+                            f"<b>Robot {ridx}</b><br>"
+                            f"Nodes: {n_assigned} &bull; Passes: {n_passes} &bull; Solved: {n_solved}<br>"
+                            f"<small>{_pos_str}</small>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                # Simulation tabs: Combined + per-robot
+                _sim_tab_names = ["All Robots (Combined)"] + [f"Robot {i}" for i in range(_n_result_robots)]
+                sim_tabs = st.tabs(_sim_tab_names)
+
+                # --- Combined multi-robot simulation ---
+                with sim_tabs[0]:
+                    st.markdown("Animated simulation showing all robots sequentially with color-coded trails.")
+
+                    mctr_cols = st.columns(3)
+                    with mctr_cols[0]:
+                        mctr_max_frames = st.slider("Max frames", 50, 500, 150, key="mctr_max_frames")
+                    with mctr_cols[1]:
+                        mctr_frame_dur = st.slider("Frame speed (ms)", 20, 200, 50, key="mctr_frame_speed")
+                    with mctr_cols[2]:
+                        mctr_trail_pts = st.slider("Trail detail", 1000, 20000, 5000, key="mctr_trail_pts")
+
+                    if st.button("Generate Multi-Robot Simulation", key="mctr_sim_generate"):
+                        with st.spinner("Building multi-robot animation frames..."):
+                            from xcavate.viz.ctr_simulation import create_multi_ctr_simulation
+                            fig_mctr = create_multi_ctr_simulation(
+                                per_robot_passes=result.get("per_robot_passes", {}),
+                                per_robot_solutions=result.get("per_robot_solutions", {}),
+                                ctr_configs_multi=result["ctr_configs_multi"],
+                                points=pts,
+                                max_frames=mctr_max_frames,
+                                trail_max_points=mctr_trail_pts,
+                            )
+                            fig_mctr.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = mctr_frame_dur
+                            st.session_state.mctr_sim_figure = fig_mctr
+
+                    if "mctr_sim_figure" in st.session_state and st.session_state.mctr_sim_figure is not None:
+                        st.plotly_chart(st.session_state.mctr_sim_figure, use_container_width=True)
+                        st.download_button(
+                            label="Download Multi-Robot Simulation (HTML)",
+                            data=st.session_state.mctr_sim_figure.to_html(
+                                full_html=True, include_plotlyjs="cdn",
+                            ).encode("utf-8"),
+                            file_name="ctr_multi_robot_simulation.html",
+                            mime="text/html",
+                            key="dl_mctr_sim_html",
+                        )
+
+                    # Static overview
+                    if st.button("Generate Static Overview", key="mctr_static_generate"):
+                        with st.spinner("Building static overview..."):
+                            from xcavate.viz.ctr_simulation import create_multi_ctr_static_view
+                            fig_static = create_multi_ctr_static_view(
+                                per_robot_passes=result.get("per_robot_passes", {}),
+                                per_robot_solutions=result.get("per_robot_solutions", {}),
+                                ctr_configs_multi=result["ctr_configs_multi"],
+                                points=pts,
+                            )
+                            st.session_state.mctr_static_figure = fig_static
+
+                    if "mctr_static_figure" in st.session_state and st.session_state.mctr_static_figure is not None:
+                        st.plotly_chart(st.session_state.mctr_static_figure, use_container_width=True)
+                        st.download_button(
+                            label="Download Static Overview (HTML)",
+                            data=st.session_state.mctr_static_figure.to_html(
+                                full_html=True, include_plotlyjs="cdn",
+                            ).encode("utf-8"),
+                            file_name="ctr_multi_robot_overview.html",
+                            mime="text/html",
+                            key="dl_mctr_static_html",
+                        )
+
+                # --- Per-robot simulation tabs ---
+                for ridx in range(_n_result_robots):
+                    with sim_tabs[ridx + 1]:
+                        robot_passes = _prp.get(ridx, {})
+                        robot_solutions = result.get("per_robot_solutions", {}).get(ridx, {})
+                        robot_cfg = result["ctr_configs_multi"][ridx] if ridx < len(result["ctr_configs_multi"]) else None
+
+                        if not robot_passes or not robot_cfg:
+                            st.info(f"Robot {ridx} has no passes to simulate.")
+                            continue
+
+                        color = _robot_colors[ridx % len(_robot_colors)]
+                        st.markdown(
+                            f"<span style='color:{color}; font-weight:bold;'>Robot {ridx}</span> "
+                            f"&mdash; {len(robot_passes)} passes, {sum(len(v) for v in robot_passes.values())} nodes",
+                            unsafe_allow_html=True,
+                        )
+
+                        import numpy as _np
+                        _r_ctr_base = _np.array(robot_cfg["X"])
+                        _r_R_hat = _np.array(robot_cfg["R_hat"])
+                        _r_n_hat = _np.array(robot_cfg["n_hat"])
+                        _r_theta_match = robot_cfg["theta_match"]
+                        _r_radius = robot_cfg["radius"]
+
+                        r_sim_mode = st.radio(
+                            "Mode", ["All passes", "Single pass"],
+                            index=0, horizontal=True, key=f"rsim_mode_{ridx}",
+                        )
+
+                        r_sim_pass_idx = None
+                        if r_sim_mode == "Single pass":
+                            r_pass_keys = sorted(robot_passes.keys())
+                            r_sim_pass_idx = st.selectbox(
+                                "Select pass",
+                                r_pass_keys,
+                                format_func=lambda k: f"Pass {k} ({len(robot_passes[k])} nodes)",
+                                key=f"rsim_pass_{ridx}",
+                            )
+
+                        r_sim_cols = st.columns(3)
+                        with r_sim_cols[0]:
+                            r_max_frames = st.slider("Max frames", 50, 500, 150, key=f"rsim_frames_{ridx}")
+                        with r_sim_cols[1]:
+                            r_frame_dur = st.slider("Frame speed (ms)", 20, 200, 50, key=f"rsim_speed_{ridx}")
+                        with r_sim_cols[2]:
+                            r_trail_pts = st.slider("Trail detail", 1000, 20000, 5000, key=f"rsim_trail_{ridx}")
+
+                        if st.button(f"Generate Robot {ridx} Simulation", key=f"rsim_gen_{ridx}"):
+                            with st.spinner(f"Building Robot {ridx} animation..."):
+                                if r_sim_mode == "All passes":
+                                    fig_r = create_ctr_simulation_all_passes(
+                                        print_passes=robot_passes,
+                                        points=pts,
+                                        gimbal_solutions=robot_solutions,
+                                        ctr_base=_r_ctr_base,
+                                        R_hat_base=_r_R_hat,
+                                        radius=_r_radius,
+                                        n_hat_base=_r_n_hat,
+                                        theta_match=_r_theta_match,
+                                        max_frames=r_max_frames,
+                                        trail_max_points=r_trail_pts,
+                                    )
+                                else:
+                                    fig_r = create_ctr_simulation(
+                                        print_pass=robot_passes[r_sim_pass_idx],
+                                        points=pts,
+                                        gimbal_solutions=robot_solutions,
+                                        ctr_base=_r_ctr_base,
+                                        R_hat_base=_r_R_hat,
+                                        radius=_r_radius,
+                                        n_hat_base=_r_n_hat,
+                                        theta_match=_r_theta_match,
+                                        max_frames=r_max_frames,
+                                        trail_max_points=r_trail_pts,
+                                    )
+                                fig_r.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = r_frame_dur
+                                st.session_state[f"rsim_figure_{ridx}"] = fig_r
+
+                        _rsim_key = f"rsim_figure_{ridx}"
+                        if _rsim_key in st.session_state and st.session_state[_rsim_key] is not None:
+                            st.plotly_chart(st.session_state[_rsim_key], use_container_width=True)
+                            st.download_button(
+                                label=f"Download Robot {ridx} Simulation (HTML)",
+                                data=st.session_state[_rsim_key].to_html(
+                                    full_html=True, include_plotlyjs="cdn",
+                                ).encode("utf-8"),
+                                file_name=f"ctr_robot{ridx}_simulation.html",
+                                mime="text/html",
+                                key=f"dl_rsim_{ridx}",
+                            )
+
+            # ----------------------------------------------------------
+            # Single-CTR simulation (original behavior)
+            # ----------------------------------------------------------
+            else:
+                sim_mode = st.radio(
+                    "Simulation mode",
+                    ["All passes", "Single pass"],
+                    index=0,
+                    horizontal=True,
+                    key="sim_mode",
                 )
 
-            # Animation controls
-            sim_cols = st.columns(3)
-            with sim_cols[0]:
-                _default_frames = 300 if sim_mode == "All passes" else 200
-                max_frames = st.slider("Max frames", 50, 500, _default_frames, key="sim_max_frames")
-            with sim_cols[1]:
-                frame_duration = st.slider("Frame speed (ms)", 20, 200, 50, key="sim_frame_speed")
-            with sim_cols[2]:
-                trail_points = st.slider("Trail detail", 1000, 50000, 20000, key="sim_trail_pts")
+                sim_pass_idx = None
+                if sim_mode == "Single pass":
+                    pass_keys = sorted(passes.keys())
+                    sim_pass_idx = st.selectbox(
+                        "Select pass to simulate",
+                        pass_keys,
+                        format_func=lambda k: f"Pass {k} ({len(passes[k])} nodes)",
+                        key="sim_pass_select",
+                    )
 
-            if st.button("Generate Simulation", key="sim_generate"):
-                with st.spinner("Building animation frames..."):
-                    from xcavate.core.ctr_kinematics import CTRConfig
+                sim_cols = st.columns(3)
+                with sim_cols[0]:
+                    _default_frames = 300 if sim_mode == "All passes" else 200
+                    max_frames = st.slider("Max frames", 50, 500, _default_frames, key="sim_max_frames")
+                with sim_cols[1]:
+                    frame_duration = st.slider("Frame speed (ms)", 20, 200, 50, key="sim_frame_speed")
+                with sim_cols[2]:
+                    trail_points = st.slider("Trail detail", 1000, 50000, 20000, key="sim_trail_pts")
 
-                    ctr_config_obj = CTRConfig.from_xcavate_config(config_saved)
+                if st.button("Generate Simulation", key="sim_generate"):
+                    with st.spinner("Building animation frames..."):
+                        from xcavate.core.ctr_kinematics import CTRConfig
 
-                    if sim_mode == "All passes":
-                        fig_sim = create_ctr_simulation_all_passes(
-                            print_passes=passes,
-                            points=pts,
-                            gimbal_solutions=solutions,
-                            ctr_base=ctr_config_obj.X,
-                            R_hat_base=ctr_config_obj.R_hat,
-                            radius=ctr_config_obj.radius,
-                            n_hat_base=ctr_config_obj.n_hat,
-                            theta_match=ctr_config_obj.theta_match,
-                            max_frames=max_frames,
-                            trail_max_points=trail_points,
-                        )
-                    else:
-                        fig_sim = create_ctr_simulation(
-                            print_pass=passes[sim_pass_idx],
-                            points=pts,
-                            gimbal_solutions=solutions,
-                            ctr_base=ctr_config_obj.X,
-                            R_hat_base=ctr_config_obj.R_hat,
-                            radius=ctr_config_obj.radius,
-                            n_hat_base=ctr_config_obj.n_hat,
-                            theta_match=ctr_config_obj.theta_match,
-                            max_frames=max_frames,
-                            trail_max_points=trail_points,
-                        )
-                    # Update frame duration
-                    fig_sim.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = frame_duration
+                        ctr_config_obj = CTRConfig.from_xcavate_config(config_saved)
 
-                    st.session_state.sim_figure = fig_sim
+                        if sim_mode == "All passes":
+                            fig_sim = create_ctr_simulation_all_passes(
+                                print_passes=passes,
+                                points=pts,
+                                gimbal_solutions=solutions,
+                                ctr_base=ctr_config_obj.X,
+                                R_hat_base=ctr_config_obj.R_hat,
+                                radius=ctr_config_obj.radius,
+                                n_hat_base=ctr_config_obj.n_hat,
+                                theta_match=ctr_config_obj.theta_match,
+                                max_frames=max_frames,
+                                trail_max_points=trail_points,
+                            )
+                        else:
+                            fig_sim = create_ctr_simulation(
+                                print_pass=passes[sim_pass_idx],
+                                points=pts,
+                                gimbal_solutions=solutions,
+                                ctr_base=ctr_config_obj.X,
+                                R_hat_base=ctr_config_obj.R_hat,
+                                radius=ctr_config_obj.radius,
+                                n_hat_base=ctr_config_obj.n_hat,
+                                theta_match=ctr_config_obj.theta_match,
+                                max_frames=max_frames,
+                                trail_max_points=trail_points,
+                            )
+                        fig_sim.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = frame_duration
 
-            if "sim_figure" in st.session_state and st.session_state.sim_figure is not None:
-                st.plotly_chart(st.session_state.sim_figure, use_container_width=True)
-                st.download_button(
-                    label="Download Simulation (HTML)",
-                    data=st.session_state.sim_figure.to_html(
-                        full_html=True, include_plotlyjs="cdn",
-                    ).encode("utf-8"),
-                    file_name="ctr_simulation.html",
-                    mime="text/html",
-                    key="dl_sim_html",
-                )
+                        st.session_state.sim_figure = fig_sim
+
+                if "sim_figure" in st.session_state and st.session_state.sim_figure is not None:
+                    st.plotly_chart(st.session_state.sim_figure, use_container_width=True)
+                    st.download_button(
+                        label="Download Simulation (HTML)",
+                        data=st.session_state.sim_figure.to_html(
+                            full_html=True, include_plotlyjs="cdn",
+                        ).encode("utf-8"),
+                        file_name="ctr_simulation.html",
+                        mime="text/html",
+                        key="dl_sim_html",
+                    )
 
         # --------------------------------------------------------------
         # Downloads
