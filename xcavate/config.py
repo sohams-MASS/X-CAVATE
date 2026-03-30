@@ -98,6 +98,7 @@ class XcavateConfig:
     positive_ink_diam: float = 1.0
     positive_ink_syringe_diam: float = 1.0
     positive_ink_factor: float = 1.0
+    positive_ink_shift: float = 0.0          # mm radius shift (calibration)
     positive_ink_start_arterial: float = 0.0
     positive_ink_start_venous: float = 0.0
     positive_ink_end_arterial: float = 0.0

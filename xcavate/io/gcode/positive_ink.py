@@ -27,10 +27,13 @@ class PositiveInkGcodeWriter(GcodeWriter):
         self._curr_ph = config.printhead_2
 
     def _compute_extrusion(self, norm: float, line_radius: float) -> float:
-        """Compute extrusion amount from segment length and geometry."""
+        """Compute extrusion amount from segment length and geometry.
+
+        E = f * N * ((L_r + s) / S_r)^2
+        """
         cfg = self.config
         syringe_radius = cfg.positive_ink_syringe_diam / 2
-        return cfg.positive_ink_factor * norm * (line_radius / syringe_radius) ** 2
+        return cfg.positive_ink_factor * norm * ((line_radius + cfg.positive_ink_shift) / syringe_radius) ** 2
 
     def _get_line_radius(self, node: int, points: np.ndarray, nd: int) -> float:
         cfg = self.config

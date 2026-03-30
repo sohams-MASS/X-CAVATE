@@ -105,6 +105,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--positiveInk_diam", type=float, default=1)
     p.add_argument("--positiveInk_syringe_diam", type=float, default=1)
     p.add_argument("--positiveInk_factor", type=float, default=1)
+    p.add_argument("--positiveInk_shift", type=float, default=0,
+                    help="Radius shift (mm) from PDP calibration")
     p.add_argument("--positiveInk_start_arterial", type=float, default=0)
     p.add_argument("--positiveInk_start_venous", type=float, default=0)
     p.add_argument("--positiveInk_end_arterial", type=float, default=0)
@@ -174,6 +176,7 @@ def args_to_config(args: argparse.Namespace) -> XcavateConfig:
         positive_ink_diam=args.positiveInk_diam,
         positive_ink_syringe_diam=args.positiveInk_syringe_diam,
         positive_ink_factor=args.positiveInk_factor,
+        positive_ink_shift=args.positiveInk_shift,
         positive_ink_start_arterial=args.positiveInk_start_arterial,
         positive_ink_start_venous=args.positiveInk_start_venous,
         positive_ink_end_arterial=args.positiveInk_end_arterial,

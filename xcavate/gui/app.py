@@ -366,14 +366,14 @@ with st.sidebar:
 
     # -- Positive Ink Displacement --
     with st.expander("Positive Ink Displacement"):
-        with st.popover("Calibration Reference", use_container_width=True):
+        with st.popover("Extrusion Calibration", use_container_width=True):
             st.markdown("#### Conservation of Volume")
             st.markdown(
                 "Positive ink displacement controls the plunger position "
                 "to match the volume of the printed line, instead of "
                 "relying on pressure and speed alone."
             )
-            st.latex(r"E = f \times N \left(\frac{L_r \pm s}{S_r}\right)^2")
+            st.latex(r"E = f \times N \left(\frac{L_r + s}{S_r}\right)^2")
             st.markdown(
                 "| Symbol | Meaning |\n"
                 "|--------|---------|\n"
@@ -384,17 +384,87 @@ with st.sidebar:
                 "| $f$ | Scaling factor |\n"
                 "| $s$ | Radius shift to account for error |"
             )
-            st.markdown("#### Validation (Nozzle 580 \u00b5m, 3% Carbopol, pH ~7)")
+            st.markdown("---")
             st.markdown(
-                "| Nominal Radius (\u00b5m) | Mean Radius \u00b1 SD (\u00b5m) |\n"
-                "|:---:|:---:|\n"
-                "| 200 | 250.2 \u00b1 14 |\n"
-                "| 400 | 423 \u00b1 16 |\n"
-                "| 600 | 639 \u00b1 21 |\n"
-                "| 800 | 866 \u00b1 18 |\n"
-                "| 1000 | 1062 \u00b1 35 |"
+                "**Print test lines at known intended radii, measure the "
+                "actual radii, then fit *f* and *s*.** Enter comma-separated "
+                "values below (in \u00b5m)."
             )
-            st.caption("N=5; 3% 971 DMEM (1X)-Carbopol with dye in 3% Carbopol")
+            pdp_intended_str = st.text_input(
+                "Intended radii (\u00b5m)",
+                value="200, 400, 600, 800, 1000",
+                key="pdp_cal_intended",
+            )
+            pdp_measured_str = st.text_input(
+                "Measured radii (\u00b5m)",
+                value="",
+                key="pdp_cal_measured",
+                help="Enter measured radii in the same order as intended.",
+            )
+            pdp_cal_run = st.button("Fit Calibration", key="pdp_cal_run")
+
+            if pdp_cal_run and pdp_measured_str.strip():
+                try:
+                    import numpy as np
+
+                    intended = np.array([float(x) for x in pdp_intended_str.split(",")])
+                    measured = np.array([float(x) for x in pdp_measured_str.split(",")])
+                    if len(intended) != len(measured):
+                        st.error("Intended and measured lists must have the same length.")
+                    elif len(intended) < 2:
+                        st.error("Need at least 2 data points.")
+                    else:
+                        # Fit: R_measured = a * R_intended + b
+                        # where f = a^2 and s = b / a  (in µm, convert to mm)
+                        coeffs = np.polyfit(intended, measured, 1)
+                        a, b = float(coeffs[0]), float(coeffs[1])
+                        fitted = np.polyval(coeffs, intended)
+                        r_squared = 1.0 - np.sum((measured - fitted) ** 2) / np.sum((measured - np.mean(measured)) ** 2)
+
+                        f_cal = a ** 2
+                        s_cal = b / a / 1000.0  # µm -> mm
+
+                        st.session_state.pdp_cal_factor = round(f_cal, 6)
+                        st.session_state.pdp_cal_shift = round(s_cal, 6)
+
+                        st.success(f"**f** = {f_cal:.4f},  **s** = {s_cal:.4f} mm  (R\u00b2 = {r_squared:.4f})")
+
+                        # Show fit plot
+                        import plotly.graph_objects as go
+                        fig = go.Figure()
+                        fig.add_trace(go.Scatter(
+                            x=intended, y=measured, mode="markers",
+                            name="Measured", marker=dict(size=10),
+                        ))
+                        fig.add_trace(go.Scatter(
+                            x=intended, y=fitted, mode="lines",
+                            name=f"Fit (f={f_cal:.3f}, s={s_cal:.4f} mm)",
+                        ))
+                        fig.update_layout(
+                            xaxis_title="Intended radius (\u00b5m)",
+                            yaxis_title="Measured radius (\u00b5m)",
+                            height=350,
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+
+                        # Show data table
+                        st.markdown(
+                            "| Intended (\u00b5m) | Measured (\u00b5m) | Predicted (\u00b5m) | Error (\u00b5m) |\n"
+                            "|:---:|:---:|:---:|:---:|\n"
+                            + "\n".join(
+                                f"| {i:.0f} | {m:.1f} | {p:.1f} | {m - p:+.1f} |"
+                                for i, m, p in zip(intended, measured, fitted)
+                            )
+                        )
+                except Exception as exc:
+                    st.error(f"Calibration failed: {exc}")
+
+            if "pdp_cal_factor" in st.session_state:
+                st.info(
+                    f"Calibrated values: **f** = {st.session_state.pdp_cal_factor}, "
+                    f"**s** = {st.session_state.pdp_cal_shift} mm. "
+                    "These are applied to Factor and Shift below."
+                )
 
         positive_ink_radii = st.toggle(
             "Use radii", value=False, key="pi_radii",
@@ -413,10 +483,17 @@ with st.sidebar:
             key="pi_syr_diam",
             help="Inner diameter (mm) of the syringe barrel. Used to compute plunger displacement from vessel geometry.",
         )
+        _default_factor = st.session_state.get("pdp_cal_factor", 1.0)
+        _default_shift = st.session_state.get("pdp_cal_shift", 0.0)
         positive_ink_factor = st.number_input(
-            "Factor", min_value=0.0, value=1.0, step=0.1, format="%.3f",
+            "Factor (f)", min_value=0.0, value=_default_factor, step=0.1, format="%.6f",
             key="pi_factor",
-            help="Scaling multiplier for computed extrusion amounts. Use 1.0 for default; increase to extrude more ink per unit length.",
+            help="Scaling multiplier for extrusion. Set via calibration or manually.",
+        )
+        positive_ink_shift = st.number_input(
+            "Shift (s, mm)", value=_default_shift, step=0.001, format="%.6f",
+            key="pi_shift",
+            help="Radius shift (mm) to compensate for systematic error. Set via calibration or manually.",
         )
 
         separate_artven = st.toggle(
@@ -517,6 +594,7 @@ def _build_config(
         positive_ink_diam=positive_ink_diam,
         positive_ink_syringe_diam=positive_ink_syringe_diam,
         positive_ink_factor=positive_ink_factor,
+        positive_ink_shift=positive_ink_shift,
         positive_ink_start_arterial=positive_ink_start_arterial if separate_artven else positive_ink_start,
         positive_ink_start_venous=positive_ink_start_venous if separate_artven else positive_ink_start,
         positive_ink_end_arterial=positive_ink_end_arterial if separate_artven else positive_ink_end,
