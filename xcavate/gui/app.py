@@ -488,12 +488,12 @@ with st.sidebar:
         positive_ink_factor = st.number_input(
             "Factor (f)", min_value=0.0, value=_default_factor, step=0.1, format="%.6f",
             key="pi_factor",
-            help="Scaling multiplier for extrusion. Set via calibration or manually.",
+            help="Scaling multiplier for extrusion. Auto-filled by the calibration above, or enter your own value directly.",
         )
         positive_ink_shift = st.number_input(
             "Shift (s, mm)", value=_default_shift, step=0.001, format="%.6f",
             key="pi_shift",
-            help="Radius shift (mm) to compensate for systematic error. Set via calibration or manually.",
+            help="Radius shift (mm) to compensate for systematic error. Auto-filled by the calibration above, or enter your own value directly.",
         )
 
         separate_artven = st.toggle(
