@@ -366,6 +366,36 @@ with st.sidebar:
 
     # -- Positive Ink Displacement --
     with st.expander("Positive Ink Displacement"):
+        with st.popover("Calibration Reference", use_container_width=True):
+            st.markdown("#### Conservation of Volume")
+            st.markdown(
+                "Positive ink displacement controls the plunger position "
+                "to match the volume of the printed line, instead of "
+                "relying on pressure and speed alone."
+            )
+            st.latex(r"E = f \times N \left(\frac{L_r \pm s}{S_r}\right)^2")
+            st.markdown(
+                "| Symbol | Meaning |\n"
+                "|--------|---------|\n"
+                "| $E$ | Linear displacement of the plunger |\n"
+                "| $N$ | Length of printed line |\n"
+                "| $L_r$ | Radius of the line being printed |\n"
+                "| $S_r$ | Radius of the syringe |\n"
+                "| $f$ | Scaling factor |\n"
+                "| $s$ | Radius shift to account for error |"
+            )
+            st.markdown("#### Validation (Nozzle 580 \u00b5m, 3% Carbopol, pH ~7)")
+            st.markdown(
+                "| Nominal Radius (\u00b5m) | Mean Radius \u00b1 SD (\u00b5m) |\n"
+                "|:---:|:---:|\n"
+                "| 200 | 250.2 \u00b1 14 |\n"
+                "| 400 | 423 \u00b1 16 |\n"
+                "| 600 | 639 \u00b1 21 |\n"
+                "| 800 | 866 \u00b1 18 |\n"
+                "| 1000 | 1062 \u00b1 35 |"
+            )
+            st.caption("N=5; 3% 971 DMEM (1X)-Carbopol with dye in 3% Carbopol")
+
         positive_ink_radii = st.toggle(
             "Use radii", value=False, key="pi_radii",
             help="When enabled, uses per-node vessel radii from SimVascular data instead of a fixed diameter for extrusion calculations. The nozzle diameter will not be used, as print speed remains constant.",
