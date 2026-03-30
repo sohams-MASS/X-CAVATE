@@ -368,7 +368,7 @@ with st.sidebar:
     with st.expander("Positive Ink Displacement"):
         positive_ink_radii = st.toggle(
             "Use radii", value=False, key="pi_radii",
-            help="When enabled, uses per-node vessel radii from SimVascular data instead of a fixed diameter for extrusion calculations.",
+            help="When enabled, uses per-node vessel radii from SimVascular data instead of a fixed diameter for extrusion calculations. The nozzle diameter will not be used, as print speed remains constant.",
         )
         if not positive_ink_radii:
             positive_ink_diam = st.number_input(
