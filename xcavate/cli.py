@@ -116,6 +116,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Pathfinding algorithm (default: dfs)")
     p.add_argument("--output_dir", type=str, default="outputs",
                     help="Output directory (default: outputs)")
+    p.add_argument("--branchpoint_distance_threshold", type=float, default=0,
+                    help="Max distance (mm) for branchpoint connections. "
+                         "Endpoints farther than this from any other vessel "
+                         "are treated as leaf nodes. 0 = disabled (default)")
 
     return p
 
@@ -175,6 +179,7 @@ def args_to_config(args: argparse.Namespace) -> XcavateConfig:
         positive_ink_end_arterial=args.positiveInk_end_arterial,
         positive_ink_end_venous=args.positiveInk_end_venous,
         output_dir=Path(args.output_dir),
+        branchpoint_distance_threshold=args.branchpoint_distance_threshold,
     )
 
 

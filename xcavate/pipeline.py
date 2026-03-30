@@ -140,6 +140,7 @@ def run_xcavate(
     ) = build_graph(
         points_xyz, coord_num_dict_interp, vessel_start_nodes,
         inlet_nodes, outlet_nodes,
+        branchpoint_distance_threshold=config.branchpoint_distance_threshold,
     )
 
     # Write diagnostic files

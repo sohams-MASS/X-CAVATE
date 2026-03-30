@@ -82,6 +82,9 @@ class XcavateConfig:
     resting_pressure: float = 0.0    # psi
     active_pressure: float = 5.0     # psi
 
+    # --- Graph construction ---
+    branchpoint_distance_threshold: float = 0.0  # mm; 0 = disabled (legacy)
+
     # --- Gap closure ---
     num_overlap: int = 0
     overlap_algorithm: OverlapAlgorithm = OverlapAlgorithm.RETRACE

@@ -43,6 +43,7 @@ def build_graph(
     vessel_start_nodes: List[int],
     inlet_nodes: List[int],
     outlet_nodes: List[int],
+    branchpoint_distance_threshold: float = 0.0,
 ) -> Tuple[
     Graph,
     BranchDict,
@@ -72,6 +73,10 @@ def build_graph(
         Node indices that are physiological inlets (true endpoints).
     outlet_nodes : list[int]
         Node indices that are physiological outlets (true endpoints).
+    branchpoint_distance_threshold : float
+        Maximum distance for an endpoint to be connected as a branchpoint.
+        Endpoints farther than this from the nearest node in another vessel
+        are treated as leaf nodes.  0.0 disables the threshold (legacy).
 
     Returns
     -------
@@ -121,6 +126,7 @@ def build_graph(
         nodes_by_vessel,
         inlet_nodes,
         outlet_nodes,
+        branchpoint_distance_threshold=branchpoint_distance_threshold,
     )
 
     # Step 3 -- build daughter-centric lookups and detect repeated daughters
@@ -215,6 +221,7 @@ def _find_branchpoints(
     nodes_by_vessel: NodesByVessel,
     inlet_nodes: List[int],
     outlet_nodes: List[int],
+    branchpoint_distance_threshold: float = 0.0,
 ) -> BranchDict:
     """Detect branchpoints where vessel endpoints meet other vessels.
 
@@ -234,6 +241,12 @@ def _find_branchpoints(
     nodes_by_vessel : dict[int, list[int]]
     inlet_nodes, outlet_nodes : list[int]
         True endpoints to exclude from branchpoint detection.
+    branchpoint_distance_threshold : float
+        Maximum distance (in coordinate units) between an endpoint and the
+        nearest node in another vessel for the connection to be considered a
+        real branchpoint.  Endpoints farther than this are treated as leaf
+        nodes and skipped.  A value of 0.0 disables the threshold (legacy
+        behaviour: all endpoints connect).
 
     Returns
     -------
@@ -286,6 +299,14 @@ def _find_branchpoints(
                 other_dists, other_indices = _brute_force_nearest(
                     points, endpoint, vessel_nodes_set, k=2
                 )
+
+            # Skip if the nearest other-vessel node is beyond the threshold
+            if branchpoint_distance_threshold > 0 and other_dists[0] > branchpoint_distance_threshold:
+                logger.debug(
+                    "Endpoint %d skipped: nearest other-vessel node %d is %.2f mm away (threshold %.2f)",
+                    endpoint, other_indices[0], other_dists[0], branchpoint_distance_threshold,
+                )
+                continue
 
             lowest = other_indices[0]
             second_lowest = other_indices[1]
