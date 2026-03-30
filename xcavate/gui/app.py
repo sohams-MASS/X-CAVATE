@@ -370,11 +370,14 @@ with st.sidebar:
             "Use radii", value=False, key="pi_radii",
             help="When enabled, uses per-node vessel radii from SimVascular data instead of a fixed diameter for extrusion calculations.",
         )
-        positive_ink_diam = st.number_input(
-            "Diameter", min_value=0.001, value=1.0, step=0.1, format="%.3f",
-            key="pi_diam",
-            help="Fixed vessel diameter (mm) used for extrusion calculations when 'Use radii' is off.",
-        )
+        if not positive_ink_radii:
+            positive_ink_diam = st.number_input(
+                "Diameter", min_value=0.001, value=1.0, step=0.1, format="%.3f",
+                key="pi_diam",
+                help="Fixed vessel diameter (mm) used for extrusion calculations when 'Use radii' is off.",
+            )
+        else:
+            positive_ink_diam = 1.0
         positive_ink_syringe_diam = st.number_input(
             "Syringe diameter", min_value=0.001, value=1.0, step=0.1, format="%.3f",
             key="pi_syr_diam",
