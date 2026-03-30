@@ -364,108 +364,9 @@ with st.sidebar:
             help="Pneumatic pressure (psi) applied to the active printhead during extrusion.",
         )
 
-    # -- Positive Ink Displacement --
-    with st.expander("Positive Ink Displacement"):
-        with st.popover("Extrusion Calibration", use_container_width=True):
-            st.markdown("#### Conservation of Volume")
-            st.markdown(
-                "Positive ink displacement controls the plunger position "
-                "to match the volume of the printed line, instead of "
-                "relying on pressure and speed alone."
-            )
-            st.latex(r"E = f \times N \left(\frac{L_r + s}{S_r}\right)^2")
-            st.markdown(
-                "| Symbol | Meaning |\n"
-                "|--------|---------|\n"
-                "| $E$ | Linear displacement of the plunger |\n"
-                "| $N$ | Length of printed line |\n"
-                "| $L_r$ | Radius of the line being printed |\n"
-                "| $S_r$ | Radius of the syringe |\n"
-                "| $f$ | Scaling factor |\n"
-                "| $s$ | Radius shift to account for error |"
-            )
-            st.markdown("---")
-            st.markdown(
-                "**Print test lines at known intended radii, measure the "
-                "actual radii, then fit *f* and *s*.** Enter comma-separated "
-                "values below (in \u00b5m)."
-            )
-            pdp_intended_str = st.text_input(
-                "Intended radii (\u00b5m)",
-                value="200, 400, 600, 800, 1000",
-                key="pdp_cal_intended",
-            )
-            pdp_measured_str = st.text_input(
-                "Measured radii (\u00b5m)",
-                value="",
-                key="pdp_cal_measured",
-                help="Enter measured radii in the same order as intended.",
-            )
-            pdp_cal_run = st.button("Fit Calibration", key="pdp_cal_run")
-
-            if pdp_cal_run and pdp_measured_str.strip():
-                try:
-                    import numpy as np
-
-                    intended = np.array([float(x) for x in pdp_intended_str.split(",")])
-                    measured = np.array([float(x) for x in pdp_measured_str.split(",")])
-                    if len(intended) != len(measured):
-                        st.error("Intended and measured lists must have the same length.")
-                    elif len(intended) < 2:
-                        st.error("Need at least 2 data points.")
-                    else:
-                        # Fit: R_measured = a * R_intended + b
-                        # where f = a^2 and s = b / a  (in µm, convert to mm)
-                        coeffs = np.polyfit(intended, measured, 1)
-                        a, b = float(coeffs[0]), float(coeffs[1])
-                        fitted = np.polyval(coeffs, intended)
-                        r_squared = 1.0 - np.sum((measured - fitted) ** 2) / np.sum((measured - np.mean(measured)) ** 2)
-
-                        f_cal = a ** 2
-                        s_cal = b / a / 1000.0  # µm -> mm
-
-                        st.session_state.pdp_cal_factor = round(f_cal, 6)
-                        st.session_state.pdp_cal_shift = round(s_cal, 6)
-
-                        st.success(f"**f** = {f_cal:.4f},  **s** = {s_cal:.4f} mm  (R\u00b2 = {r_squared:.4f})")
-
-                        # Show fit plot
-                        import plotly.graph_objects as go
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(
-                            x=intended, y=measured, mode="markers",
-                            name="Measured", marker=dict(size=10),
-                        ))
-                        fig.add_trace(go.Scatter(
-                            x=intended, y=fitted, mode="lines",
-                            name=f"Fit (f={f_cal:.3f}, s={s_cal:.4f} mm)",
-                        ))
-                        fig.update_layout(
-                            xaxis_title="Intended radius (\u00b5m)",
-                            yaxis_title="Measured radius (\u00b5m)",
-                            height=350,
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-
-                        # Show data table
-                        st.markdown(
-                            "| Intended (\u00b5m) | Measured (\u00b5m) | Predicted (\u00b5m) | Error (\u00b5m) |\n"
-                            "|:---:|:---:|:---:|:---:|\n"
-                            + "\n".join(
-                                f"| {i:.0f} | {m:.1f} | {p:.1f} | {m - p:+.1f} |"
-                                for i, m, p in zip(intended, measured, fitted)
-                            )
-                        )
-                except Exception as exc:
-                    st.error(f"Calibration failed: {exc}")
-
-            if "pdp_cal_factor" in st.session_state:
-                st.info(
-                    f"Calibrated values: **f** = {st.session_state.pdp_cal_factor}, "
-                    f"**s** = {st.session_state.pdp_cal_shift} mm. "
-                    "These are applied to Factor and Shift below."
-                )
-
+    # -- Positive Ink Displacement (only shown for Positive Ink printer) --
+    if printer_type == PrinterType.POSITIVE_INK:
+      with st.expander("Positive Ink Displacement"):
         positive_ink_radii = st.toggle(
             "Use radii", value=False, key="pi_radii",
             help="When enabled, uses per-node vessel radii from SimVascular data instead of a fixed diameter for extrusion calculations. The nozzle diameter will not be used, as print speed remains constant.",
@@ -488,12 +389,12 @@ with st.sidebar:
         positive_ink_factor = st.number_input(
             "Factor (f)", min_value=0.0, value=_default_factor, step=0.1, format="%.6f",
             key="pi_factor",
-            help="Scaling multiplier for extrusion. Auto-filled by the calibration above, or enter your own value directly.",
+            help="Scaling multiplier for extrusion. Auto-filled from the Extrusion Calibration tab, or enter your own value directly.",
         )
         positive_ink_shift = st.number_input(
             "Shift (s, mm)", value=_default_shift, step=0.001, format="%.6f",
             key="pi_shift",
-            help="Radius shift (mm) to compensate for systematic error. Auto-filled by the calibration above, or enter your own value directly.",
+            help="Radius shift (mm) to compensate for systematic error. Auto-filled from the Extrusion Calibration tab, or enter your own value directly.",
         )
 
         separate_artven = st.toggle(
@@ -541,7 +442,19 @@ with st.sidebar:
             positive_ink_start_venous = 0.0
             positive_ink_end_arterial = 0.0
             positive_ink_end_venous = 0.0
-
+    else:
+        # Defaults when not using Positive Ink printer
+        positive_ink_radii = False
+        positive_ink_diam = 1.0
+        positive_ink_syringe_diam = 1.0
+        positive_ink_factor = 1.0
+        positive_ink_shift = 0.0
+        positive_ink_start = 0.0
+        positive_ink_end = 0.0
+        positive_ink_start_arterial = 0.0
+        positive_ink_start_venous = 0.0
+        positive_ink_end_arterial = 0.0
+        positive_ink_end_venous = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -693,14 +606,21 @@ for _key in _CUSTOM_GCODE_FIELDS:
 tab_names = ["Pipeline"]
 if custom_gcode:
     tab_names.append("Custom G-code")
-tab_names += ["Print Instructions", "Calibration"]
+tab_names.append("Print Instructions")
+if printer_type in (PrinterType.PRESSURE, PrinterType.AEROTECH):
+    tab_names.append("Pressure Calibration")
+if printer_type == PrinterType.POSITIVE_INK:
+    tab_names.append("Extrusion Calibration")
 
 tabs = st.tabs(tab_names)
 idx = 0
 main_tab = tabs[idx]; idx += 1
 cg_tab = tabs[idx] if custom_gcode else None; idx += (1 if custom_gcode else 0)
 instr_tab = tabs[idx]; idx += 1
-cal_tab = tabs[idx]
+cal_tab = tabs[idx] if printer_type in (PrinterType.PRESSURE, PrinterType.AEROTECH) else None
+if printer_type in (PrinterType.PRESSURE, PrinterType.AEROTECH):
+    idx += 1
+pdp_cal_tab = tabs[idx] if printer_type == PrinterType.POSITIVE_INK else None
 
 if cg_tab is not None:
     with cg_tab:
@@ -1133,153 +1053,279 @@ with instr_tab:
         st.info("Run the pipeline first to see print instructions.")
 
 # ---------------------------------------------------------------------------
-# Calibration tab
+# Pressure Calibration tab (Pressure / Aerotech only)
 # ---------------------------------------------------------------------------
 
-with cal_tab:
+if cal_tab is not None:
+    with cal_tab:
 
-    # --- Compute Q section ---------------------------------------------------
-    st.subheader("Compute Volumetric Flow Rate (Q)")
+        # --- Compute Q section -----------------------------------------------
+        st.subheader("Compute Volumetric Flow Rate (Q)")
 
-    q_csv_upload = st.file_uploader(
-        "Upload measured diameters CSV",
-        type=["csv"],
-        help="CSV file with a 'Length' column containing measured filament diameters in microns.",
-        key="q_csv_upload",
-    )
+        q_csv_upload = st.file_uploader(
+            "Upload measured diameters CSV",
+            type=["csv"],
+            help="CSV file with a 'Length' column containing measured filament diameters in microns.",
+            key="q_csv_upload",
+        )
 
-    q_print_speeds_str = st.text_input(
-        "Print speeds used during calibration (comma-separated, mm/s)",
-        value="1.0",
-        help="Comma-separated list of print speeds in mm/s, one per target diameter group (same order). "
-             "Pressure is held constant; speed is varied for each calibration filament.",
-        key="q_print_speeds_str",
-    )
+        q_print_speeds_str = st.text_input(
+            "Print speeds used during calibration (comma-separated, mm/s)",
+            value="1.0",
+            help="Comma-separated list of print speeds in mm/s, one per target diameter group (same order). "
+                 "Pressure is held constant; speed is varied for each calibration filament.",
+            key="q_print_speeds_str",
+        )
 
-    q_measurements_per = st.number_input(
-        "Measurements per speed",
-        value=3,
-        min_value=1,
-        step=1,
-        help="Number of rows in the CSV to average for each print speed group.",
-        key="q_measurements_per",
-    )
+        q_measurements_per = st.number_input(
+            "Measurements per speed",
+            value=3,
+            min_value=1,
+            step=1,
+            help="Number of rows in the CSV to average for each print speed group.",
+            key="q_measurements_per",
+        )
 
-    q_run = st.button("Compute Q", disabled=(q_csv_upload is None))
+        q_run = st.button("Compute Q", disabled=(q_csv_upload is None))
 
-    if q_run and q_csv_upload is not None:
-        try:
-            q_print_speeds = [float(x.strip()) for x in q_print_speeds_str.split(",")]
-            q_csv_bytes = q_csv_upload.getvalue()
+        if q_run and q_csv_upload is not None:
+            try:
+                q_print_speeds = [float(x.strip()) for x in q_print_speeds_str.split(",")]
+                q_csv_bytes = q_csv_upload.getvalue()
 
-            from xcavate.core.calibration import compute_flow_rate
+                from xcavate.core.calibration import compute_flow_rate
 
-            q_result = compute_flow_rate(
-                measured_csv_bytes=q_csv_bytes,
-                print_speeds=q_print_speeds,
-                measurements_per_target=q_measurements_per,
+                q_result = compute_flow_rate(
+                    measured_csv_bytes=q_csv_bytes,
+                    print_speeds=q_print_speeds,
+                    measurements_per_target=q_measurements_per,
+                )
+
+                st.session_state.q_result = q_result
+            except Exception as exc:
+                st.error(f"Q computation failed: {exc}")
+                st.exception(exc)
+
+        if "q_result" in st.session_state and st.session_state.q_result is not None:
+            q_result = st.session_state.q_result
+
+            st.metric("Computed Q (mm\u00b3/s)", f"{q_result['q_value']:.6f}")
+            st.plotly_chart(q_result["figure"], use_container_width=True)
+
+            q_dl_cols = st.columns(2)
+            with q_dl_cols[0]:
+                st.download_button(
+                    label="Download Q_pressure.txt",
+                    data=q_result["q_txt_bytes"],
+                    file_name="Q_pressure.txt",
+                    mime="text/plain",
+                    key="dl_q_txt",
+                )
+            with q_dl_cols[1]:
+                st.download_button(
+                    label="Download radii_pressure.html",
+                    data=q_result["html_bytes"],
+                    file_name="radii_pressure.html",
+                    mime="text/html",
+                    key="dl_q_html",
+                )
+
+        st.divider()
+
+        # --- Validation section ----------------------------------------------
+        st.subheader("Calibration Validation")
+        st.caption(
+            "Compare target filament diameters against measured values from a CSV. "
+            "The CSV must have a column named **Length** with measurements in microns."
+        )
+
+        cal_csv_upload = st.file_uploader(
+            "Upload measured diameters CSV",
+            type=["csv"],
+            help="CSV file with a 'Length' column containing measured filament diameters in microns.",
+            key="cal_csv_upload",
+        )
+
+        cal_targets_str = st.text_input(
+            "Target diameters (comma-separated, mm)",
+            value="0.4, 0.375, 0.35, 0.325, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1, 0.075",
+            help="Comma-separated list of expected filament diameters in mm, in the same order as the measurements.",
+            key="cal_targets_str",
+        )
+
+        cal_measurements_per = st.number_input(
+            "Measurements per target",
+            value=3,
+            min_value=1,
+            step=1,
+            help="Number of rows in the CSV to average for each target diameter.",
+            key="cal_measurements_per",
+        )
+
+        cal_run = st.button("Run Validation", disabled=(cal_csv_upload is None))
+
+        if cal_run and cal_csv_upload is not None:
+            try:
+                target_diameters = [float(x.strip()) for x in cal_targets_str.split(",")]
+                csv_bytes = cal_csv_upload.getvalue()
+
+                from xcavate.core.calibration import validate_calibration
+
+                cal_result = validate_calibration(
+                    target_diameters=target_diameters,
+                    measured_csv_bytes=csv_bytes,
+                    measurements_per_target=cal_measurements_per,
+                )
+
+                st.session_state.cal_result = cal_result
+            except Exception as exc:
+                st.error(f"Calibration validation failed: {exc}")
+                st.exception(exc)
+
+        if "cal_result" in st.session_state and st.session_state.cal_result is not None:
+            cal_result = st.session_state.cal_result
+
+            st.plotly_chart(cal_result["figure"], use_container_width=True)
+
+            cal_dl_cols = st.columns(2)
+            with cal_dl_cols[0]:
+                st.download_button(
+                    label="Download CSV report",
+                    data=cal_result["csv_bytes"],
+                    file_name="calibration_error.csv",
+                    mime="text/csv",
+                    key="dl_cal_csv",
+                )
+            with cal_dl_cols[1]:
+                st.download_button(
+                    label="Download HTML report",
+                    data=cal_result["html_bytes"],
+                    file_name="calibration_error.html",
+                    mime="text/html",
+                    key="dl_cal_html",
+                )
+
+# ---------------------------------------------------------------------------
+# Extrusion Calibration tab (Positive Ink only)
+# ---------------------------------------------------------------------------
+
+if pdp_cal_tab is not None:
+    with pdp_cal_tab:
+        st.subheader("Extrusion Calibration")
+        st.markdown(
+            "Fit the scaling factor **f** and radius shift **s** for the "
+            "positive ink displacement formula:"
+        )
+        st.latex(r"E = f \times N \left(\frac{L_r + s}{S_r}\right)^2")
+        st.markdown(
+            "| Symbol | Meaning |\n"
+            "|--------|---------|\n"
+            "| $E$ | Linear displacement of the plunger |\n"
+            "| $N$ | Length of printed line |\n"
+            "| $L_r$ | Radius of the line being printed |\n"
+            "| $S_r$ | Radius of the syringe |\n"
+            "| $f$ | Scaling factor |\n"
+            "| $s$ | Radius shift to account for error |"
+        )
+
+        st.divider()
+        st.markdown(
+            "**Print test lines at known intended radii, measure the "
+            "actual radii, then fit *f* and *s*.** Enter comma-separated "
+            "values below (in \u00b5m)."
+        )
+
+        pdp_intended_str = st.text_input(
+            "Intended radii (\u00b5m)",
+            value="200, 400, 600, 800, 1000",
+            key="pdp_cal_intended",
+        )
+        pdp_measured_str = st.text_input(
+            "Measured radii (\u00b5m)",
+            value="",
+            key="pdp_cal_measured",
+            help="Enter measured radii in the same order as intended.",
+        )
+
+        pdp_manual_cols = st.columns(2)
+        with pdp_manual_cols[0]:
+            pdp_manual_f = st.number_input(
+                "Manual factor (f)", min_value=0.0,
+                value=st.session_state.get("pdp_cal_factor", 1.0),
+                step=0.01, format="%.6f", key="pdp_manual_f",
+                help="Enter your own factor value, or let the fit populate it.",
+            )
+        with pdp_manual_cols[1]:
+            pdp_manual_s = st.number_input(
+                "Manual shift (s, mm)",
+                value=st.session_state.get("pdp_cal_shift", 0.0),
+                step=0.001, format="%.6f", key="pdp_manual_s",
+                help="Enter your own shift value, or let the fit populate it.",
             )
 
-            st.session_state.q_result = q_result
-        except Exception as exc:
-            st.error(f"Q computation failed: {exc}")
-            st.exception(exc)
+        pdp_cal_run = st.button("Fit Calibration", key="pdp_cal_run")
 
-    if "q_result" in st.session_state and st.session_state.q_result is not None:
-        q_result = st.session_state.q_result
+        if pdp_cal_run and pdp_measured_str.strip():
+            try:
+                import numpy as np
 
-        st.metric("Computed Q (mm\u00b3/s)", f"{q_result['q_value']:.6f}")
-        st.plotly_chart(q_result["figure"], use_container_width=True)
+                intended = np.array([float(x) for x in pdp_intended_str.split(",")])
+                measured = np.array([float(x) for x in pdp_measured_str.split(",")])
+                if len(intended) != len(measured):
+                    st.error("Intended and measured lists must have the same length.")
+                elif len(intended) < 2:
+                    st.error("Need at least 2 data points.")
+                else:
+                    # Fit: R_measured = a * R_intended + b
+                    # where f = a^2 and s = b / a  (in µm, convert to mm)
+                    coeffs = np.polyfit(intended, measured, 1)
+                    a, b = float(coeffs[0]), float(coeffs[1])
+                    fitted = np.polyval(coeffs, intended)
+                    r_squared = 1.0 - np.sum((measured - fitted) ** 2) / np.sum((measured - np.mean(measured)) ** 2)
 
-        q_dl_cols = st.columns(2)
-        with q_dl_cols[0]:
-            st.download_button(
-                label="Download Q_pressure.txt",
-                data=q_result["q_txt_bytes"],
-                file_name="Q_pressure.txt",
-                mime="text/plain",
-                key="dl_q_txt",
-            )
-        with q_dl_cols[1]:
-            st.download_button(
-                label="Download radii_pressure.html",
-                data=q_result["html_bytes"],
-                file_name="radii_pressure.html",
-                mime="text/html",
-                key="dl_q_html",
-            )
+                    f_cal = a ** 2
+                    s_cal = b / a / 1000.0  # µm -> mm
 
-    st.divider()
+                    st.session_state.pdp_cal_factor = round(f_cal, 6)
+                    st.session_state.pdp_cal_shift = round(s_cal, 6)
 
-    # --- Validation section --------------------------------------------------
-    st.subheader("Calibration Validation")
-    st.caption(
-        "Compare target filament diameters against measured values from a CSV. "
-        "The CSV must have a column named **Length** with measurements in microns."
-    )
+                    st.success(f"**f** = {f_cal:.4f},  **s** = {s_cal:.4f} mm  (R\u00b2 = {r_squared:.4f})")
 
-    cal_csv_upload = st.file_uploader(
-        "Upload measured diameters CSV",
-        type=["csv"],
-        help="CSV file with a 'Length' column containing measured filament diameters in microns.",
-        key="cal_csv_upload",
-    )
+                    import plotly.graph_objects as go
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=intended, y=measured, mode="markers",
+                        name="Measured", marker=dict(size=10),
+                    ))
+                    fig.add_trace(go.Scatter(
+                        x=intended, y=fitted, mode="lines",
+                        name=f"Fit (f={f_cal:.3f}, s={s_cal:.4f} mm)",
+                    ))
+                    fig.update_layout(
+                        xaxis_title="Intended radius (\u00b5m)",
+                        yaxis_title="Measured radius (\u00b5m)",
+                        height=400,
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
 
-    cal_targets_str = st.text_input(
-        "Target diameters (comma-separated, mm)",
-        value="0.4, 0.375, 0.35, 0.325, 0.3, 0.275, 0.25, 0.225, 0.2, 0.175, 0.15, 0.125, 0.1, 0.075",
-        help="Comma-separated list of expected filament diameters in mm, in the same order as the measurements.",
-        key="cal_targets_str",
-    )
+                    st.markdown(
+                        "| Intended (\u00b5m) | Measured (\u00b5m) | Predicted (\u00b5m) | Error (\u00b5m) |\n"
+                        "|:---:|:---:|:---:|:---:|\n"
+                        + "\n".join(
+                            f"| {i:.0f} | {m:.1f} | {p:.1f} | {m - p:+.1f} |"
+                            for i, m, p in zip(intended, measured, fitted)
+                        )
+                    )
+            except Exception as exc:
+                st.error(f"Calibration failed: {exc}")
 
-    cal_measurements_per = st.number_input(
-        "Measurements per target",
-        value=3,
-        min_value=1,
-        step=1,
-        help="Number of rows in the CSV to average for each target diameter.",
-        key="cal_measurements_per",
-    )
-
-    cal_run = st.button("Run Validation", disabled=(cal_csv_upload is None))
-
-    if cal_run and cal_csv_upload is not None:
-        try:
-            target_diameters = [float(x.strip()) for x in cal_targets_str.split(",")]
-            csv_bytes = cal_csv_upload.getvalue()
-
-            from xcavate.core.calibration import validate_calibration
-
-            cal_result = validate_calibration(
-                target_diameters=target_diameters,
-                measured_csv_bytes=csv_bytes,
-                measurements_per_target=cal_measurements_per,
-            )
-
-            st.session_state.cal_result = cal_result
-        except Exception as exc:
-            st.error(f"Calibration validation failed: {exc}")
-            st.exception(exc)
-
-    if "cal_result" in st.session_state and st.session_state.cal_result is not None:
-        cal_result = st.session_state.cal_result
-
-        st.plotly_chart(cal_result["figure"], use_container_width=True)
-
-        cal_dl_cols = st.columns(2)
-        with cal_dl_cols[0]:
-            st.download_button(
-                label="Download CSV report",
-                data=cal_result["csv_bytes"],
-                file_name="calibration_error.csv",
-                mime="text/csv",
-                key="dl_cal_csv",
-            )
-        with cal_dl_cols[1]:
-            st.download_button(
-                label="Download HTML report",
-                data=cal_result["html_bytes"],
-                file_name="calibration_error.html",
-                mime="text/html",
-                key="dl_cal_html",
-            )
+        # Apply manual or fitted values to session state for sidebar pickup
+        if pdp_cal_run and not pdp_measured_str.strip():
+            # User clicked fit without measured data — use manual values
+            st.session_state.pdp_cal_factor = pdp_manual_f
+            st.session_state.pdp_cal_shift = pdp_manual_s
+            st.info("Manual values applied. They will be used in the sidebar Factor and Shift fields.")
+        elif not pdp_cal_run:
+            # Always sync manual inputs back to session state
+            st.session_state.pdp_cal_factor = pdp_manual_f
+            st.session_state.pdp_cal_shift = pdp_manual_s
