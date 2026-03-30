@@ -1247,22 +1247,6 @@ if pdp_cal_tab is not None:
             help="Enter measured radii in the same order as intended.",
         )
 
-        pdp_manual_cols = st.columns(2)
-        with pdp_manual_cols[0]:
-            pdp_manual_f = st.number_input(
-                "Manual factor (f)", min_value=0.0,
-                value=st.session_state.get("pdp_cal_factor", 1.0),
-                step=0.01, format="%.6f", key="pdp_manual_f",
-                help="Enter your own factor value, or let the fit populate it.",
-            )
-        with pdp_manual_cols[1]:
-            pdp_manual_s = st.number_input(
-                "Manual shift (s, mm)",
-                value=st.session_state.get("pdp_cal_shift", 0.0),
-                step=0.001, format="%.6f", key="pdp_manual_s",
-                help="Enter your own shift value, or let the fit populate it.",
-            )
-
         pdp_cal_run = st.button("Fit Calibration", key="pdp_cal_run")
 
         if pdp_cal_run and pdp_measured_str.strip():
@@ -1288,6 +1272,7 @@ if pdp_cal_tab is not None:
 
                     st.session_state.pdp_cal_factor = round(f_cal, 6)
                     st.session_state.pdp_cal_shift = round(s_cal, 6)
+                    st.session_state.pdp_source = "fitted"
 
                     st.success(f"**f** = {f_cal:.4f},  **s** = {s_cal:.4f} mm  (R\u00b2 = {r_squared:.4f})")
 
@@ -1319,13 +1304,42 @@ if pdp_cal_tab is not None:
             except Exception as exc:
                 st.error(f"Calibration failed: {exc}")
 
-        # Apply manual or fitted values to session state for sidebar pickup
-        if pdp_cal_run and not pdp_measured_str.strip():
-            # User clicked fit without measured data — use manual values
+        st.divider()
+
+        pdp_use_manual = st.toggle(
+            "Enter f and s manually", value=False, key="pdp_use_manual",
+        )
+        if pdp_use_manual:
+            pdp_manual_cols = st.columns(2)
+            with pdp_manual_cols[0]:
+                pdp_manual_f = st.number_input(
+                    "Factor (f)", min_value=0.0, value=1.0,
+                    step=0.01, format="%.6f", key="pdp_manual_f",
+                )
+            with pdp_manual_cols[1]:
+                pdp_manual_s = st.number_input(
+                    "Shift (s, mm)", value=0.0,
+                    step=0.001, format="%.6f", key="pdp_manual_s",
+                )
             st.session_state.pdp_cal_factor = pdp_manual_f
             st.session_state.pdp_cal_shift = pdp_manual_s
-            st.info("Manual values applied. They will be used in the sidebar Factor and Shift fields.")
-        elif not pdp_cal_run:
-            # Always sync manual inputs back to session state
-            st.session_state.pdp_cal_factor = pdp_manual_f
-            st.session_state.pdp_cal_shift = pdp_manual_s
+            st.session_state.pdp_source = "manual"
+
+        # --- Status banner showing active values ---
+        st.divider()
+        _active_f = st.session_state.get("pdp_cal_factor", 1.0)
+        _active_s = st.session_state.get("pdp_cal_shift", 0.0)
+        _source = st.session_state.get("pdp_source", "default")
+        if _source == "fitted":
+            st.success(
+                f"Using **fitted** values:  f = {_active_f:.6f},  s = {_active_s:.6f} mm"
+            )
+        elif _source == "manual":
+            st.info(
+                f"Using **manual** values:  f = {_active_f:.6f},  s = {_active_s:.6f} mm"
+            )
+        else:
+            st.warning(
+                f"Using **default** values:  f = {_active_f:.6f},  s = {_active_s:.6f} mm  "
+                "(no calibration or manual entry performed)"
+            )
