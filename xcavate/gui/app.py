@@ -210,6 +210,14 @@ with st.sidebar:
             close_mm_pass_upload = None
             close_mm_delta_upload = None
 
+        branchpoint_distance_threshold = st.number_input(
+            "Branchpoint distance threshold (mm)",
+            min_value=0.0, value=2.0, step=0.5, format="%.1f",
+            help="Maximum distance (mm) for connecting vessel endpoints as branchpoints. "
+                 "Endpoints farther than this from any other vessel are treated as leaf nodes. "
+                 "Use 0 to disable (connects all endpoints, may create spurious interconnections).",
+        )
+
     # -- Tolerancing --
     with st.expander("Tolerancing"):
         tolerance_flag = st.toggle(
@@ -529,6 +537,7 @@ def _build_config(
         speed_calc=speed_calc,
         close_sm=close_sm,
         close_mm=close_mm,
+        branchpoint_distance_threshold=branchpoint_distance_threshold,
         output_dir=output_dir,
     )
 
