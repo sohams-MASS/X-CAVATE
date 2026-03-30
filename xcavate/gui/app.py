@@ -463,6 +463,7 @@ with st.sidebar:
         positive_ink_start_venous = 0.0
         positive_ink_end_arterial = 0.0
         positive_ink_end_venous = 0.0
+        separate_artven = False
 
 
 # ---------------------------------------------------------------------------
