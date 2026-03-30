@@ -89,14 +89,35 @@ with st.sidebar:
     st.divider()
     st.header("Required Parameters")
 
-    nozzle_diameter = st.number_input(
-        "Nozzle diameter (mm)",
-        min_value=0.001,
-        value=0.5,
-        step=0.01,
-        format="%.3f",
-        help="Outer diameter of the print nozzle in millimeters.",
+    _printer_labels = {
+        "Pressure": PrinterType.PRESSURE,
+        "Positive Ink": PrinterType.POSITIVE_INK,
+        "Aerotech": PrinterType.AEROTECH,
+    }
+    printer_label = st.selectbox(
+        "Printer type",
+        options=list(_printer_labels.keys()),
+        index=0,
+        help="Hardware target: Pressure (pneumatic extrusion), Positive Ink (displacement pump), or Aerotech (6-axis motion controller).",
     )
+    printer_type = _printer_labels[printer_label]
+
+    _hide_nozzle = (
+        printer_type == PrinterType.POSITIVE_INK
+        and st.session_state.get("pi_radii", False)
+    )
+    if not _hide_nozzle:
+        nozzle_diameter = st.number_input(
+            "Nozzle diameter (mm)",
+            min_value=0.001,
+            value=0.5,
+            step=0.01,
+            format="%.3f",
+            help="Outer diameter of the print nozzle in millimeters.",
+        )
+    else:
+        nozzle_diameter = 0.5
+
     container_height = st.number_input(
         "Container height (mm)",
         min_value=0.1,
@@ -121,19 +142,6 @@ with st.sidebar:
         format="%.1f",
         help="Distance to raise nozzle above the container between passes.",
     )
-
-    _printer_labels = {
-        "Pressure": PrinterType.PRESSURE,
-        "Positive Ink": PrinterType.POSITIVE_INK,
-        "Aerotech": PrinterType.AEROTECH,
-    }
-    printer_label = st.selectbox(
-        "Printer type",
-        options=list(_printer_labels.keys()),
-        index=0,
-        help="Hardware target: Pressure (pneumatic extrusion), Positive Ink (displacement pump), or Aerotech (6-axis motion controller).",
-    )
-    printer_type = _printer_labels[printer_label]
 
     multimaterial = st.toggle(
         "Multimaterial", value=False,
