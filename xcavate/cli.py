@@ -33,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tolerance", type=float, required=False, default=0,
                     help="Amount of tolerance (0 is none)")
     p.add_argument("--nozzle_diameter", type=float, required=True,
-                    help="Outer diameter of nozzle (mm)")
+                    help="Inner diameter of nozzle (mm)")
     p.add_argument("--container_height", type=float, required=True,
                     help="Height of print container (mm)")
     p.add_argument("--num_decimals", type=int, required=True,

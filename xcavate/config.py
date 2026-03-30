@@ -35,7 +35,7 @@ class XcavateConfig:
     # --- Required parameters ---
     network_file: Path
     inletoutlet_file: Path
-    nozzle_diameter: float          # mm, outer diameter
+    nozzle_diameter: float          # mm, inner diameter
     container_height: float         # mm
     num_decimals: int               # decimal places for output rounding
     amount_up: float = 10.0         # mm above container to raise nozzle between passes

@@ -113,7 +113,7 @@ with st.sidebar:
             value=0.5,
             step=0.01,
             format="%.3f",
-            help="Outer diameter of the print nozzle in millimeters.",
+            help="Inner diameter of the print nozzle in millimeters.",
         )
     else:
         nozzle_diameter = 0.5
