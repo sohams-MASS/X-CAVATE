@@ -1291,8 +1291,9 @@ if pdp_cal_tab is not None:
                     fitted = np.polyval(coeffs, intended)
                     r_squared = 1.0 - np.sum((measured - fitted) ** 2) / np.sum((measured - np.mean(measured)) ** 2)
 
-                    f_cal = a ** 2
-                    s_cal = b / a / 1000.0
+                    # Inverse correction: f = 1/a², s = -b (µm → mm)
+                    f_cal = 1.0 / (a ** 2)
+                    s_cal = -b / 1000.0
 
                     st.session_state.pdp_cal_factor = round(f_cal, 6)
                     st.session_state.pdp_cal_shift = round(s_cal, 6)
