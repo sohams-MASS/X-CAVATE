@@ -1286,49 +1286,58 @@ if pdp_cal_tab is not None:
                 elif len(intended) < 2:
                     st.error("Need at least 2 data points.")
                 else:
-                    # Fit: R_measured = a * R_intended + b
-                    # where f = a^2 and s = b / a  (in µm, convert to mm)
                     coeffs = np.polyfit(intended, measured, 1)
                     a, b = float(coeffs[0]), float(coeffs[1])
                     fitted = np.polyval(coeffs, intended)
                     r_squared = 1.0 - np.sum((measured - fitted) ** 2) / np.sum((measured - np.mean(measured)) ** 2)
 
                     f_cal = a ** 2
-                    s_cal = b / a / 1000.0  # µm -> mm
+                    s_cal = b / a / 1000.0
 
                     st.session_state.pdp_cal_factor = round(f_cal, 6)
                     st.session_state.pdp_cal_shift = round(s_cal, 6)
                     st.session_state.pdp_source = "fitted"
-
-                    st.success(f"**f** = {f_cal:.4f},  **s** = {s_cal:.4f} mm  (R\u00b2 = {r_squared:.4f})")
-
-                    import plotly.graph_objects as go
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=intended, y=measured, mode="markers",
-                        name="Measured", marker=dict(size=10),
-                    ))
-                    fig.add_trace(go.Scatter(
-                        x=intended, y=fitted, mode="lines",
-                        name=f"Fit (f={f_cal:.3f}, s={s_cal:.4f} mm)",
-                    ))
-                    fig.update_layout(
-                        xaxis_title="Intended radius (\u00b5m)",
-                        yaxis_title="Measured radius (\u00b5m)",
-                        height=400,
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-
-                    st.markdown(
-                        "| Intended (\u00b5m) | Measured (\u00b5m) | Predicted (\u00b5m) | Error (\u00b5m) |\n"
-                        "|:---:|:---:|:---:|:---:|\n"
-                        + "\n".join(
-                            f"| {i:.0f} | {m:.1f} | {p:.1f} | {m - p:+.1f} |"
-                            for i, m, p in zip(intended, measured, fitted)
-                        )
-                    )
+                    # Store fit results for display after rerun
+                    st.session_state.pdp_fit_result = {
+                        "f": f_cal, "s": s_cal, "r2": r_squared,
+                        "intended": intended.tolist(),
+                        "measured": measured.tolist(),
+                        "fitted": fitted.tolist(),
+                    }
+                    st.rerun()
             except Exception as exc:
                 st.error(f"Calibration failed: {exc}")
+
+        # Show stored fit results (persists across reruns)
+        if "pdp_fit_result" in st.session_state:
+            res = st.session_state.pdp_fit_result
+            st.success(f"**f** = {res['f']:.4f},  **s** = {res['s']:.4f} mm  (R\u00b2 = {res['r2']:.4f})")
+
+            import plotly.graph_objects as go
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=res["intended"], y=res["measured"], mode="markers",
+                name="Measured", marker=dict(size=10),
+            ))
+            fig.add_trace(go.Scatter(
+                x=res["intended"], y=res["fitted"], mode="lines",
+                name=f"Fit (f={res['f']:.3f}, s={res['s']:.4f} mm)",
+            ))
+            fig.update_layout(
+                xaxis_title="Intended radius (\u00b5m)",
+                yaxis_title="Measured radius (\u00b5m)",
+                height=400,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown(
+                "| Intended (\u00b5m) | Measured (\u00b5m) | Predicted (\u00b5m) | Error (\u00b5m) |\n"
+                "|:---:|:---:|:---:|:---:|\n"
+                + "\n".join(
+                    f"| {i:.0f} | {m:.1f} | {p:.1f} | {m - p:+.1f} |"
+                    for i, m, p in zip(res["intended"], res["measured"], res["fitted"])
+                )
+            )
 
         st.divider()
 
