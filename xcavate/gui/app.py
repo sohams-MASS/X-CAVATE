@@ -1356,9 +1356,11 @@ if pdp_cal_tab is not None:
                     "Shift (s, mm)", value=0.0,
                     step=0.001, format="%.6f", key="pdp_manual_s",
                 )
-            st.session_state.pdp_cal_factor = pdp_manual_f
-            st.session_state.pdp_cal_shift = pdp_manual_s
-            st.session_state.pdp_source = "manual"
+            if st.button("Apply", key="pdp_apply_manual"):
+                st.session_state.pdp_cal_factor = pdp_manual_f
+                st.session_state.pdp_cal_shift = pdp_manual_s
+                st.session_state.pdp_source = "manual"
+                st.rerun()
 
         # --- Status banner showing active values ---
         st.divider()
