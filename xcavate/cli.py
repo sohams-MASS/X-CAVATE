@@ -118,6 +118,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Pathfinding algorithm (default: dfs)")
     p.add_argument("--output_dir", type=str, default="outputs",
                     help="Output directory (default: outputs)")
+    p.add_argument("--reorder_passes", type=int, default=0,
+                    help="Reorder passes for minimal nozzle travel (1=yes, 0=no)")
     p.add_argument("--branchpoint_distance_threshold", type=float, default=0,
                     help="Max distance (mm) for branchpoint connections. "
                          "Endpoints farther than this from any other vessel "
@@ -144,6 +146,7 @@ def args_to_config(args: argparse.Namespace) -> XcavateConfig:
         custom_gcode=bool(args.custom),
         printer_type=PrinterType(args.printer_type),
         algorithm=PathfindingAlgorithm(args.algorithm),
+        reorder_passes=bool(args.reorder_passes),
         scale_factor=args.scale_factor,
         top_padding=args.top_padding,
         container_x=args.container_x,

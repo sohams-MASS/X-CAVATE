@@ -49,6 +49,7 @@ class XcavateConfig:
     custom_gcode: bool = False
     printer_type: PrinterType = PrinterType.PRESSURE
     algorithm: PathfindingAlgorithm = PathfindingAlgorithm.DFS
+    reorder_passes: bool = False
 
     # --- Geometry ---
     tolerance: float = 0.0

@@ -225,6 +225,11 @@ with st.sidebar:
                  "Endpoints farther than this from any other vessel are treated as leaf nodes. "
                  "Use 0 to disable (connects all endpoints, may create spurious interconnections).",
         )
+        reorder_passes = st.toggle(
+            "Reorder passes for minimal travel", value=False,
+            help="Reorder print passes using nearest-neighbor to minimize nozzle travel distance between passes. "
+                 "Off by default to preserve original pass ordering.",
+        )
 
     # -- Tolerancing --
     with st.expander("Tolerancing"):
@@ -546,6 +551,7 @@ def _build_config(
         close_sm=close_sm,
         close_mm=close_mm,
         branchpoint_distance_threshold=branchpoint_distance_threshold,
+        reorder_passes=reorder_passes,
         output_dir=output_dir,
     )
 

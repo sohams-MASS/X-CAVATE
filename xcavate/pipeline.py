@@ -196,8 +196,9 @@ def run_xcavate(
             print_passes_sm, config.num_overlap,
         )
 
-    # Reorder for minimal travel
-    print_passes_sm = reorder_passes_nearest_neighbor(print_passes_sm, points_interp)
+    # Reorder for minimal travel (optional; off by default for equivalence)
+    if config.reorder_passes:
+        print_passes_sm = reorder_passes_nearest_neighbor(print_passes_sm, points_interp)
 
     # Speed computation
     speed_map_sm = None
