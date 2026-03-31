@@ -1291,6 +1291,9 @@ if pdp_cal_tab is not None:
                     st.session_state.pdp_cal_factor = round(f_cal, 6)
                     st.session_state.pdp_cal_shift = round(s_cal, 6)
                     st.session_state.pdp_source = "fitted"
+                    # Update sidebar widget keys so they reflect calibrated values
+                    st.session_state.pi_factor = round(f_cal, 6)
+                    st.session_state.pi_shift = round(s_cal, 6)
 
                     st.success(f"**f** = {f_cal:.4f},  **s** = {s_cal:.4f} mm  (R\u00b2 = {r_squared:.4f})")
 
@@ -1342,6 +1345,8 @@ if pdp_cal_tab is not None:
             st.session_state.pdp_cal_factor = pdp_manual_f
             st.session_state.pdp_cal_shift = pdp_manual_s
             st.session_state.pdp_source = "manual"
+            st.session_state.pi_factor = pdp_manual_f
+            st.session_state.pi_shift = pdp_manual_s
 
         # --- Status banner showing active values ---
         st.divider()
