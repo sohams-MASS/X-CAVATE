@@ -861,13 +861,15 @@ Recursive DFS stack overflow & Crashes on large networks & Replaced with iterati
 % ===== COMMIT HISTORY =====
 \section{Development Timeline}
 
-The refactoring was executed over 41 commits. Key milestones:
+Key milestones across the development history:
 
 \begin{longtable}{lp{11cm}}
 \toprule
 \textbf{Commit} & \textbf{Description} \\
 \midrule
 \endhead
+\multicolumn{2}{l}{\textit{Phase 1: Core Refactoring}} \\
+\midrule
 \texttt{649badb} & Initial refactoring: monolith $\rightarrow$ modular package with GUI \\
 \texttt{ef9514c} & Add \texttt{.gitignore}, remove cached bytecode \\
 \texttt{e61d676} & Add docs, custom G-code GUI editor, fix inlet matching \\
@@ -885,6 +887,28 @@ The refactoring was executed over 41 commits. Key milestones:
 \texttt{a4fab18} & Remove Consecutive Overlap algorithm \\
 \texttt{c8562d1} & Add 76 stress tests and edge-case tests \\
 \texttt{1544a24} & \textbf{Optimize gap closure: $O(P^2 N) \rightarrow O(PN)$ with hash indices} \\
+\midrule
+\multicolumn{2}{l}{\textit{Phase 2: Rendering, Reproducibility, and Documentation}} \\
+\midrule
+\texttt{7ca6300} & Replace old refactor reports with comprehensive engineering comparison PDF \\
+\texttt{5924005} & Optimize 3D rendering: merge traces, remove redundant plots, parallelize I/O \\
+\texttt{a6275b4} & Warn when multimaterial enabled without artven column \\
+\texttt{eecd126} & Add \texttt{environment.yml} for reproducible conda builds \\
+\midrule
+\multicolumn{2}{l}{\textit{Phase 3: Branchpoint Threshold and Positive Ink Calibration}} \\
+\midrule
+\texttt{94a45f0} & \textbf{Add branchpoint distance threshold to prevent spurious vessel interconnections} \\
+\texttt{cec2742} & Hide fixed diameter input when ``Use radii'' enabled \\
+\texttt{150a19e} & \textbf{Add interactive PDP extrusion calibration with factor and shift fitting} \\
+\texttt{28d6001} & Make calibration tabs and PDP sidebar conditional on printer type \\
+\texttt{568561e} & Hide manual f/s behind toggle; show active values status banner \\
+\texttt{98c341e} & Hide nozzle diameter when Positive Ink + Use radii enabled \\
+\texttt{350a5b6} & Fix nozzle diameter description: inner diameter, not outer \\
+\texttt{0fd39ef} & Add branchpoint distance threshold to GUI (default 2mm) \\
+\texttt{f64b627} & Bump version to 2.1.0 \\
+\texttt{e75784b} & \textbf{Fix calibration: use inverse correction ($f=1/a^2$, $s=-b$)} \\
+\texttt{c91abd5} & \textbf{Make pass reordering optional (off by default) for output equivalence} \\
+\texttt{9129703} & Update report with verified equivalence results from \texttt{tree\_Test2.txt} \\
 \bottomrule
 \end{longtable}
 
