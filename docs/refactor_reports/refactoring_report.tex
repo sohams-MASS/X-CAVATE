@@ -90,9 +90,10 @@
 \vspace{3cm}
 \begin{tabular}{rl}
 \textbf{Repository:} & \texttt{sohams-MASS/X-CAVATE} \\
-\textbf{Branch:} & \texttt{claude/serene-proskuriakova} \\
-\textbf{Date:} & March 11, 2026 \\
-\textbf{Commits:} & 41 total (initial $\rightarrow$ current) \\
+\textbf{Branch:} & \texttt{main} \\
+\textbf{Date:} & March 31, 2026 \\
+\textbf{Version:} & 2.1.0 \\
+\textbf{Commits:} & 75 total \\
 \textbf{Status:} & Production-ready, all 95 tests passing \\
 \end{tabular}
 \vfill
@@ -110,13 +111,13 @@ The X-CAVATE codebase has been transformed from a single 5,568-line monolithic P
 \begin{itemize}[leftmargin=2em]
     \item \textbf{Modular architecture:} 0 classes, 3 functions $\rightarrow$ 22 classes, 130 functions across well-defined modules.
     \item \textbf{Algorithmic optimization:} Gap closure pipeline reduced from \bigO{P^2 \times N} to \bigO{P \times N}, yielding up to \textbf{144$\times$ speedup} at 500 passes.
-    \item \textbf{Correctness guarantee:} Byte-identical output on real data (\texttt{tree\_Test2.txt}) verified across all pipeline stages---both SM and MM---with default settings.
+    \item \textbf{Correctness guarantee:} Numerically identical output on real data (\texttt{tree\_Test2.txt}) verified across all pipeline stages---both SM and MM---with default settings. Only cosmetic formatting differs (trailing whitespace, trailing decimal zeros).
     \item \textbf{Full backward compatibility:} All 57 original CLI arguments preserved; identical command-line interface.
     \item \textbf{Comprehensive test coverage:} 95 tests covering unit, integration, stress, edge-case, and performance benchmarks.
     \item \textbf{Robustness improvements:} Iterative DFS (no recursion depth limits), KD-tree spatial indexing, structured error handling.
 \end{itemize}
 
-No mathematical or algorithmic logic was altered---all changes are structural, organizational, and performance-related. The refactored code produces byte-identical output to the original for all tested inputs with default settings. An optional nearest-neighbor pass reordering feature (disabled by default) can be enabled to minimize nozzle travel; see Section~\ref{sec:equivalence-note} for details.
+No mathematical or algorithmic logic was altered---all changes are structural, organizational, and performance-related. The refactored code produces numerically identical output to the original for all tested inputs with default settings (cosmetic formatting differences only). An optional nearest-neighbor pass reordering feature (disabled by default) can be enabled to minimize nozzle travel; see Section~\ref{sec:equivalence-note} for details.
 
 % ===== GUIDING DESIGN PHILOSOPHY =====
 \section{Guiding Design Philosophy}
@@ -130,7 +131,7 @@ The redesign of X-CAVATE was approached with three guiding questions applied to 
 Equivalence was established at three levels:
 
 \begin{itemize}[leftmargin=2em]
-    \item \textbf{Core pipeline stages:} Graph construction, pathfinding, gap closure, pass subdivision, multimaterial classification, and speed calculation produce byte-identical results to the original on all tested inputs.
+    \item \textbf{Core pipeline stages:} Graph construction, pathfinding, gap closure, pass subdivision, multimaterial classification, and speed calculation produce identical results to the original on all tested inputs. Output files are numerically identical with only cosmetic formatting differences (trailing whitespace, trailing decimal zeros).
     \item \textbf{Function-by-function:} Each of the 7 optimized gap-closure functions was tested against a re-implementation of the original's nested-loop algorithm on a multi-branch test network. All outputs match.
     \item \textbf{Automated regression:} 95 tests verify invariants, boundary conditions, and output correctness to guard against regressions.
 \end{itemize}
@@ -149,13 +150,15 @@ The refactored code includes an \textbf{optional} nearest-neighbor pass reorderi
 \midrule
 SM pass contents & Identical to original & Identical to original \\
 SM pass ordering & Identical to original & Reordered for minimal travel \\
-SM coordinate/G-code files & Byte-identical & Different ordering \\
-MM output (all) & Byte-identical & Byte-identical \\
+SM coordinate/G-code files & Numerically identical\textsuperscript{*} & Different ordering \\
+MM output (all) & Numerically identical\textsuperscript{*} & Numerically identical\textsuperscript{*} \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-When disabled, both SM and MM outputs are byte-identical to the original. When enabled, SM passes are reordered to minimize nozzle travel distance; MM passes are never reordered.
+When disabled, both SM and MM outputs are numerically identical to the original (cosmetic formatting differences only---trailing whitespace, trailing decimal zeros, G-code comment style). When enabled, SM passes are reordered to minimize nozzle travel distance; MM passes are never reordered.
+
+\textsuperscript{*}\textit{Cosmetic differences only: trailing whitespace on pass headers, trailing zeros in decimal formatting, G-code comment style. All numerical values and commands are identical.}
 
 \subsection{Question 2: Is each performance improvement necessary or cosmetic?}
 
@@ -1018,13 +1021,13 @@ The refactoring solved real problems (crashes, performance, duplication), but it
 The refactoring of X-CAVATE from a monolithic script to a modular package was guided by three questions applied to every change:
 
 \begin{enumerate}[leftmargin=2em]
-    \item \textbf{Is the work produced equivalent to the original code?} Yes. With default settings, all output files are byte-identical to the original. An optional pass reordering feature (disabled by default) can be enabled to minimize nozzle travel distance. No mathematical or algorithmic logic was altered.
+    \item \textbf{Is the work produced equivalent to the original code?} Yes. With default settings, all output files are numerically and functionally identical to the original (cosmetic formatting differences only). An optional pass reordering feature (disabled by default) can be enabled to minimize nozzle travel distance. No mathematical or algorithmic logic was altered.
 
     \item \textbf{Is each performance improvement necessary or cosmetic?} Every optimization addresses a concrete, measurable problem: crashes on real data (recursive DFS), hours-long runtimes at scale (gap closure $O(P^2N)$), or maintenance burden that blocks development (6-way code duplication). No change was made for aesthetic reasons alone.
 
     \item \textbf{Who does this benefit?} Performance and robustness fixes (DFS, gap closure, KD-tree) benefit end users directly. Structural changes (modularity, tests, deduplication) benefit code maintenance and future development. New features (GUI, calibration, pass reordering) provide capabilities that did not exist before.
 \end{enumerate}
 
-The fundamental equivalence guarantee holds: with default settings, all output files are byte-identical to the original. This has been verified through full-pipeline real-data comparison, function-by-function unit testing, and 95 automated regression tests.
+The fundamental equivalence guarantee holds: with default settings, all output files are numerically and functionally identical to the original (cosmetic formatting differences only). This has been verified through full-pipeline real-data comparison on \texttt{tree\_Test2.txt}, function-by-function unit testing, and 95 automated regression tests.
 
 \end{document}
