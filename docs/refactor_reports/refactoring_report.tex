@@ -219,8 +219,8 @@ With respect to the three guiding questions, the following guarantee holds:
 
 \begin{center}
 \fbox{\parbox{0.85\textwidth}{\centering
-\textbf{With default settings, every output produced by the refactored X-CAVATE code is 100\% byte-identical to the output of the original monolithic script for the same input.}\\[0.5em]
-This has been verified via byte-identical file comparison, function-level unit testing, and 95 automated regression tests. No mathematical or algorithmic logic was altered. An optional pass reordering feature (disabled by default) can be enabled to minimize nozzle travel distance.
+\textbf{With default settings, all outputs produced by the refactored X-CAVATE code are numerically and functionally identical to the original monolithic script for the same input.}\\[0.5em]
+Verified on \texttt{tree\_Test2.txt}: all numerical values, pass contents, pass ordering, and G-code commands match exactly. The only differences are cosmetic formatting (trailing whitespace, trailing decimal zeros, G-code comment style). No mathematical or algorithmic logic was altered.
 }}
 \end{center}
 
@@ -727,14 +727,27 @@ Correctness was verified at three levels:
 
 \subsection{Results}
 
-\subsubsection{Full Pipeline: Byte-Identical Output}
+\subsubsection{Full Pipeline Output Comparison}
 
-\begin{lstlisting}[language=bash,numbers=none,caption={All output files identical (default settings)}]
-$ diff -rq outputs_baseline/ outputs_refactored/
-# (no output - all files identical)
-\end{lstlisting}
+With default settings (\texttt{reorder\_passes=False}), the original (with increased recursion limit) and refactored code were run on \texttt{tree\_Test2.txt} and all outputs compared. Results:
 
-All output files---coordinates (SM and MM), changelog, graph, special nodes, and G-code---are byte-identical between the original and refactored versions when using default settings (\texttt{reorder\_passes=False}).
+\begin{table}[H]
+\centering
+\caption{File-by-file comparison: original vs refactored (default settings)}
+\begin{tabularx}{\textwidth}{lXl}
+\toprule
+\textbf{File} & \textbf{Differences} & \textbf{Status} \\
+\midrule
+\texttt{all\_coordinates\_SM.txt} & Trailing whitespace on pass headers only & Identical \\
+\texttt{x/y/z\_coordinates\_SM.txt} & Trailing zero formatting (e.g. \texttt{412.094} vs \texttt{412.0940}) & Numerically identical \\
+\texttt{gcode\_SM\_pressure.txt} & Comment formatting only (\texttt{;Print} vs \texttt{; Print}) & Functionally identical \\
+\texttt{changelog.txt} & Trailing whitespace only & Identical \\
+\texttt{graph.txt}, \texttt{special\_nodes.txt} & None & Identical \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{No differences in numerical values, pass contents, pass ordering, or G-code commands.} All differences are cosmetic formatting: trailing whitespace on pass headers, trailing zeros in decimal output (e.g. 3 decimal digits vs 4 when \texttt{num\_decimals=4}), and minor comment style in G-code. The actual data---every coordinate, every pass, every printer command---is identical.
 
 \subsubsection{Function-by-Function Comparison}
 
@@ -900,7 +913,7 @@ Gap closure at 500 passes & $\sim$6.2 seconds & $\sim$43 ms (144$\times$ faster)
 Maximum feasible scale & $\sim$10K nodes & $>$500K nodes \\
 CLI compatibility & --- & 100\% backward compatible \\
 GUI & None & Streamlit web app \\
-Output correctness & Reference & Byte-identical (default settings) \\
+Output correctness & Reference & Numerically identical; cosmetic formatting differences only \\
 \bottomrule
 \end{tabularx}
 \end{table}
