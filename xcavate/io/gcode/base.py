@@ -81,6 +81,10 @@ class GcodeWriter(ABC):
         self.config = config
         self.codes = custom_codes
 
+    def _f_speed(self, speed_mm_s: float) -> float:
+        """Convert speed from mm/s (config units) to mm/min (G-code F parameter)."""
+        return round(speed_mm_s * 60.0, self.config.num_decimals)
+
     def write(
         self,
         output_path: Path,
@@ -138,7 +142,8 @@ class GcodeWriter(ABC):
                 x = round(points[j, 0], nd)
                 y = round(points[j, 1], nd)
                 z = round(points[j, 2], nd)
-                speed = speed_map[j] if speed_map else self.config.print_speed
+                speed_raw = speed_map[j] if speed_map else self.config.print_speed
+                speed = self._f_speed(speed_raw)
 
                 artven = 0
                 if material_map is not None:

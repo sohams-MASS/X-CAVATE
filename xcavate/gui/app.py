@@ -91,8 +91,36 @@ with st.sidebar:
     inletoutlet_upload = st.file_uploader(
         "Inlet / Outlet file (.txt)",
         type=["txt"],
-        help="Text file with inlet and outlet node coordinates.",
+        help="Text file marking the physiological entry (inlet) and exit (outlet) points "
+             "of the vascular network. These points are excluded from branchpoint detection "
+             "(so they remain as endpoints rather than false branches) and from gap closure "
+             "(since gaps at inlets/outlets are intentional network boundaries, not errors).",
     )
+
+    st.divider()
+    st.header("Scene")
+    _scene_cols = st.columns(2)
+    with _scene_cols[0]:
+        scene_upload = st.file_uploader("Load scene", type=["json"], key="scene_upload",
+                                         label_visibility="collapsed")
+    with _scene_cols[1]:
+        if st.session_state.get("pipeline_config") is not None:
+            cfg_dict = st.session_state.pipeline_config.to_dict()
+            # Exclude file paths (upload-based)
+            for k in ("network_file", "inletoutlet_file", "custom_gcode_dir", "extension_dir", "output_dir"):
+                cfg_dict.pop(k, None)
+            import json as _json
+            scene_json = _json.dumps({"version": 1, "config": cfg_dict}, indent=2)
+            st.download_button("Save scene", data=scene_json,
+                               file_name="xcavate_scene.json", mime="application/json")
+
+    if scene_upload is not None and "scene_loaded" not in st.session_state:
+        import json as _json
+        scene_data = _json.loads(scene_upload.getvalue())
+        for key, val in scene_data.get("config", {}).items():
+            st.session_state[f"scene_{key}"] = val
+        st.session_state["scene_loaded"] = True
+        st.rerun()
 
     st.divider()
     st.header("Required Parameters")
@@ -221,14 +249,22 @@ with st.sidebar:
         branchpoint_distance_threshold = st.number_input(
             "Branchpoint distance threshold (mm)",
             min_value=0.0, value=2.0, step=0.5, format="%.1f",
-            help="Maximum distance (mm) for connecting vessel endpoints as branchpoints. "
-                 "Endpoints farther than this from any other vessel are treated as leaf nodes. "
-                 "Use 0 to disable (connects all endpoints, may create spurious interconnections).",
+            help="Prevents false branches between vessels that pass close to each other. "
+                 "If two vessel endpoints are farther apart than this distance, they will NOT "
+                 "be connected as a branch. A good starting value is 2x your nozzle diameter. "
+                 "Use 0 to disable (all endpoints connect, which may create unwanted branches).",
         )
         reorder_passes = st.toggle(
             "Reorder passes for minimal travel", value=False,
             help="Reorder print passes using nearest-neighbor to minimize nozzle travel distance between passes. "
                  "Off by default to preserve original pass ordering.",
+        )
+        gap_extension_size = st.number_input(
+            "Auto gap extension (mm)",
+            min_value=0.0, value=0.0, step=0.1, format="%.2f",
+            help="Automatically extend each pass beyond its last node by this distance, "
+                 "in the direction the pass was traveling. Closes small gaps at junctions. "
+                 "Typical values: 0.1-0.5 mm. Set to 0 to disable.",
         )
 
     # -- Tolerancing --
@@ -318,6 +354,11 @@ with st.sidebar:
         container_y = st.number_input(
             "Container Y (mm)", min_value=0.0, value=50.0, step=1.0, format="%.1f",
             help="Depth of the print container (mm). Used to calculate centering instructions for the operator.",
+        )
+        convert_factor = st.number_input(
+            "Unit conversion factor", min_value=0.001, value=1.0, step=0.1, format="%.3f",
+            help="Multiplier for input coordinate units. Use 1.0 if input is in mm (default). "
+                 "Use 10.0 if input is in cm.",
         )
         scale_factor = st.number_input(
             "Scale factor", min_value=0.001, value=1.0, step=0.1, format="%.3f",
@@ -517,6 +558,7 @@ def _build_config(
         dwell_end=dwell_end,
         container_x=container_x,
         container_y=container_y,
+        convert_factor=convert_factor,
         scale_factor=scale_factor,
         top_padding=top_padding,
         downsample=downsample,
@@ -552,6 +594,7 @@ def _build_config(
         close_mm=close_mm,
         branchpoint_distance_threshold=branchpoint_distance_threshold,
         reorder_passes=reorder_passes,
+        gap_extension_size=gap_extension_size,
         output_dir=output_dir,
     )
 

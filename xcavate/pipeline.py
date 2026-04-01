@@ -299,6 +299,29 @@ def run_xcavate(
     gap_ext_sm = _load_gap_extensions(config, "SM") if config.close_sm else None
     gap_ext_mm = _load_gap_extensions(config, "MM") if config.close_mm else None
 
+    # Auto gap extensions via tangent vectors
+    if config.gap_extension_size > 0.0:
+        auto_ext_sm = _compute_auto_gap_extensions(
+            print_passes_sm, points_interp, config.gap_extension_size, config.num_decimals,
+        )
+        if gap_ext_sm is None:
+            gap_ext_sm = auto_ext_sm
+        else:
+            merged = dict(auto_ext_sm)
+            merged.update(gap_ext_sm)
+            gap_ext_sm = merged
+
+        if print_passes_mm is not None:
+            auto_ext_mm = _compute_auto_gap_extensions(
+                print_passes_mm, points_interp, config.gap_extension_size, config.num_decimals,
+            )
+            if gap_ext_mm is None:
+                gap_ext_mm = auto_ext_mm
+            else:
+                merged = dict(auto_ext_mm)
+                merged.update(gap_ext_mm)
+                gap_ext_mm = merged
+
     # G-code: single material
     writer = _create_gcode_writer(config, custom_codes)
     writer.write(
@@ -482,6 +505,42 @@ def _load_gap_extensions(config: XcavateConfig, suffix: str):
             dx, dy, dz = deltas[idx]
             extensions[pass_num] = GapExtension(delta_x=dx, delta_y=dy, delta_z=dz)
 
+    return extensions
+
+
+def _compute_auto_gap_extensions(
+    print_passes: Dict[int, List[int]],
+    points: np.ndarray,
+    extension_size: float,
+    num_decimals: int,
+) -> Dict:
+    """Compute gap extensions using tangent vectors at pass endpoints.
+
+    For each pass, computes the tangent direction from the last two nodes,
+    normalizes it, and multiplies by extension_size to get the delta.
+    """
+    from xcavate.io.gcode.base import GapExtension
+
+    extensions = {}
+    for pass_idx, nodes in print_passes.items():
+        if len(nodes) < 2:
+            continue
+        p_end = points[nodes[-1], :3]
+        p_prev = points[nodes[-2], :3]
+        tangent = p_end - p_prev
+        norm = float(np.linalg.norm(tangent))
+        if norm < 1e-12 and len(nodes) >= 3:
+            p_prev = points[nodes[-3], :3]
+            tangent = p_end - p_prev
+            norm = float(np.linalg.norm(tangent))
+        if norm < 1e-12:
+            continue
+        delta = (tangent / norm) * extension_size
+        extensions[pass_idx] = GapExtension(
+            delta_x=round(float(delta[0]), num_decimals),
+            delta_y=round(float(delta[1]), num_decimals),
+            delta_z=round(float(delta[2]), num_decimals),
+        )
     return extensions
 
 

@@ -30,11 +30,11 @@ class PressureGcodeWriter(GcodeWriter):
                 self._write_custom(f, self.codes.rest_pressure_ph1 if self.codes else "")
                 self._write_custom(f, self.codes.active_pressure_ph2 if self.codes else "")
                 f.write(f"G91 G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                        f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
-                f.write(f"G91 G1 X-{cfg.offset_x} F{cfg.jog_translation} \n")
-                f.write(f"G91 G1 Y{y_to_ven} F{cfg.jog_speed} \n")
+                        f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+                f.write(f"G91 G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
+                f.write(f"G91 G1 Y{y_to_ven} F{self._f_speed(cfg.jog_speed)} \n")
                 f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
-                        f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
+                        f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
                 f.write("G90 \n")
                 f.write(f"G92 X{x} Y{y} {cfg.axis_1}{z} {cfg.axis_2}{z} \n")
                 self._write_custom(f, self.codes.start_extrusion_ph2 if self.codes else "")
@@ -90,9 +90,9 @@ class PressureGcodeWriter(GcodeWriter):
             self._write_custom(f, self.codes.rest_pressure_ph2 if self.codes else "")
             self._write_custom(f, self.codes.active_pressure_ph1 if self.codes else "")
             f.write(f"G91 G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
-            f.write(f"G91 G1 X{cfg.offset_x} F{cfg.jog_translation} \n")
-            f.write(f"G91 G1 Y{y_to_art} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G91 G1 X{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
+            f.write(f"G91 G1 Y{y_to_art} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
                     f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} \n")
             f.write("G90 \n")
@@ -110,9 +110,9 @@ class PressureGcodeWriter(GcodeWriter):
             self._write_custom(f, self.codes.rest_pressure_ph1 if self.codes else "")
             self._write_custom(f, self.codes.active_pressure_ph2 if self.codes else "")
             f.write(f"G91 G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
-            f.write(f"G91 G1 X-{cfg.offset_x} F{cfg.jog_translation} \n")
-            f.write(f"G91 G1 Y{y_to_ven} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G91 G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
+            f.write(f"G91 G1 Y{y_to_ven} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
                     f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} \n")
             f.write("G90 \n")
@@ -143,14 +143,14 @@ class PressureGcodeWriter(GcodeWriter):
             self._write_custom(f, self.codes.dwell_end if self.codes else "")
             self._write_custom(f, self.codes.stop_extrusion_ph1 if self.codes else "")
             self._write_custom(f, self.codes.stop_extrusion_ph2 if self.codes else "")
-            f.write(f"G91 G1 {self._curr_axis}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
-            f.write(f"G90 G1 {cfg.axis_1}{network_top} {cfg.axis_2}{network_top} F{cfg.jog_speed} \n")
+            f.write(f"G91 G1 {self._curr_axis}{cfg.initial_lift} F{self._f_speed(cfg.jog_speed_lift)} \n")
+            f.write(f"G90 G1 {cfg.axis_1}{network_top} {cfg.axis_2}{network_top} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"; ending on {'ARTERIAL' if self._curr == 1 else 'VENOUS'} \n")
         else:
             f.write("G91 \n")
             self._write_custom(f, self.codes.dwell_end if self.codes else "")
             self._write_custom(f, self.codes.stop_extrusion if self.codes else "")
-            f.write(f"G1 {cfg.axis_1}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.initial_lift} F{self._f_speed(cfg.jog_speed_lift)} \n")
             f.write("G90 \n")
             f.write(f"G1 {cfg.axis_1}{network_top} F10 \n")
 

@@ -56,14 +56,14 @@ class PositiveInkGcodeWriter(GcodeWriter):
             f.write("; moving to ARTERIAL \n")
             f.write("G90 \n")
             f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G91 \n")
-            f.write(f"G1 X-{cfg.offset_x} F{cfg.jog_translation} \n")
+            f.write(f"G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             y_off = cfg.offset_y if cfg.front_nozzle == 1 else -cfg.offset_y
-            f.write(f"G1 Y{y_off} F{cfg.jog_translation} \n")
+            f.write(f"G1 Y{y_off} F{self._f_speed(cfg.jog_translation)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{x} Y{y} \n")
-            f.write(f"G1 {cfg.axis_1}{z} F{cfg.jog_speed} \n")
+            f.write(f"G1 {cfg.axis_1}{z} F{self._f_speed(cfg.jog_speed)} \n")
             if cfg.custom_gcode and self.codes:
                 f.write("G91 \n")
                 self._write_custom(f, self.codes.start_extrusion_ph1)
@@ -75,7 +75,7 @@ class PositiveInkGcodeWriter(GcodeWriter):
             f.write("; Print Pass 0 \n")
             f.write(f"G92 X{x} Y{y} {cfg.axis_1}{z} {cfg.axis_2}{z} \n")
             f.write("G90 \n")
-            f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             if cfg.custom_gcode and self.codes:
                 f.write("G91 \n")
                 self._write_custom(f, self.codes.start_extrusion_ph2)
@@ -95,10 +95,10 @@ class PositiveInkGcodeWriter(GcodeWriter):
             self._curr_ph = cfg.printhead_1
             f.write("; moving to ARTERIAL \n")
             f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G91 \n")
-            f.write(f"G1 X-{cfg.offset_x} F{cfg.jog_translation} \n")
-            f.write(f"G1 Y{y_to_art} F{cfg.jog_speed} \n")
+            f.write(f"G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
+            f.write(f"G1 Y{y_to_art} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{prev_x} Y{prev_y} \n")
             f.write(f"G1 X{x} Y{y} \n")
@@ -115,10 +115,10 @@ class PositiveInkGcodeWriter(GcodeWriter):
             self._curr_ph = cfg.printhead_2
             f.write("; moving to VENOUS \n")
             f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G91 \n")
-            f.write(f"G1 X{cfg.offset_x} F{cfg.jog_translation} \n")
-            f.write(f"G1 Y{y_to_ven} F{cfg.jog_translation} \n")
+            f.write(f"G1 X{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
+            f.write(f"G1 Y{y_to_ven} F{self._f_speed(cfg.jog_translation)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{prev_x} Y{prev_y} \n")
             f.write(f"G1 X{x} Y{y} \n")
@@ -181,9 +181,9 @@ class PositiveInkGcodeWriter(GcodeWriter):
             else:
                 self._write_custom(f, self.codes.stop_extrusion_ph2)
                 self._plunger_v += cfg.positive_ink_end_venous
-        f.write(f"G1 {self._curr_axis}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
+        f.write(f"G1 {self._curr_axis}{cfg.initial_lift} F{self._f_speed(cfg.jog_speed_lift)} \n")
         f.write("G90 \n")
-        f.write(f"G1 {self._curr_axis}{round(network_top, cfg.num_decimals)} F{cfg.jog_speed} \n")
+        f.write(f"G1 {self._curr_axis}{round(network_top, cfg.num_decimals)} F{self._f_speed(cfg.jog_speed)} \n")
         f.write(f"; ending on {'ARTERIAL' if self._curr == 1 else 'VENOUS'} \n")
 
     def _write_custom(self, f: TextIO, code: str):

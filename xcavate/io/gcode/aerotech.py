@@ -68,11 +68,11 @@ class AerotechGcodeWriter(GcodeWriter):
             f.write(f"$AP={cfg.active_pressure} \n")
             f.write("Call setPress P$COM Q$AP \n")
             f.write(f"G91 G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
-            f.write(f"G91 G1 X-{cfg.offset_x} F{cfg.jog_translation} \n")
-            f.write(f"G91 G1 Y{y_to_ven} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G91 G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
+            f.write(f"G91 G1 Y{y_to_ven} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{x} Y{y} {cfg.axis_1}{z} {cfg.axis_2}{z} \n")
             self._write_enable(f)
@@ -121,11 +121,11 @@ class AerotechGcodeWriter(GcodeWriter):
             f.write(f"$AP={cfg.active_pressure} \n")
             f.write("Call setPress P$COM Q$AP \n")
             f.write(f"G91 G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
-            f.write(f"G91 G1 X{cfg.offset_x} F{cfg.jog_translation} \n")
-            f.write(f"G91 G1 Y{y_to_art} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G91 G1 X{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
+            f.write(f"G91 G1 Y{y_to_art} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{prev_x} Y{prev_y} \n")
             f.write(f"G90 G1 X{x} Y{y} \n")
@@ -145,11 +145,11 @@ class AerotechGcodeWriter(GcodeWriter):
             f.write(f"$AP={cfg.active_pressure} \n")
             f.write("Call setPress P$COM Q$AP \n")
             f.write(f"G91 G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
-            f.write(f"G91 G1 X-{cfg.offset_x} F{cfg.jog_translation} \n")
-            f.write(f"G91 G1 Y{y_to_ven} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G91 G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
+            f.write(f"G91 G1 Y{y_to_ven} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{cfg.jog_speed} \n")
+                    f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{prev_x} Y{prev_y} \n")
             f.write(f"G90 G1 X{x} Y{y} \n")
@@ -179,9 +179,9 @@ class AerotechGcodeWriter(GcodeWriter):
             else:
                 f.write(f"DWELL {cfg.dwell_end} \n")
             f.write(f"BRAKE {cfg.printhead_1} 1 \n")
-            f.write(f"G1 {cfg.axis_1}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.initial_lift} F{self._f_speed(cfg.jog_speed_lift)} \n")
             f.write("G90 \n")
-            f.write(f"G1 {cfg.axis_1}{network_top} F{cfg.jog_speed} \n")
+            f.write(f"G1 {cfg.axis_1}{network_top} F{self._f_speed(cfg.jog_speed)} \n")
         else:
             if self.config.custom_gcode and self.codes and self.codes.dwell_end:
                 self._write_custom(f, self.codes.dwell_end)
@@ -189,8 +189,8 @@ class AerotechGcodeWriter(GcodeWriter):
                 f.write(f"DWELL {cfg.dwell_end} \n")
             f.write(f"BRAKE {self._curr_ph} 1 \n")
             f.write(f"BRAKE {self._other_ph} 1 \n")
-            f.write(f"G91 G1 {self._curr_axis}{cfg.initial_lift} F{cfg.jog_speed_lift} \n")
-            f.write(f"G90 G1 {cfg.axis_1}{network_top} {cfg.axis_2}{network_top} F{cfg.jog_speed} \n")
+            f.write(f"G91 G1 {self._curr_axis}{cfg.initial_lift} F{self._f_speed(cfg.jog_speed_lift)} \n")
+            f.write(f"G90 G1 {cfg.axis_1}{network_top} {cfg.axis_2}{network_top} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"; ending on {'ARTERIAL' if self._curr == 1 else 'VENOUS'} \n")
 
     def _write_footer(self, f: TextIO, network_top: float):

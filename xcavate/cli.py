@@ -52,6 +52,8 @@ def build_parser() -> argparse.ArgumentParser:
     # --- Geometry ---
     p.add_argument("--container_x", type=float, default=50, help="Container x-dimension (mm)")
     p.add_argument("--container_y", type=float, default=50, help="Container y-dimension (mm)")
+    p.add_argument("--convert_factor", type=float, default=1.0,
+                    help="Unit conversion multiplier (1.0 = mm, 10.0 = cm to mm)")
     p.add_argument("--scale_factor", type=float, default=1, help="Network scale factor")
     p.add_argument("--top_padding", type=float, default=0, help="Padding above network (mm)")
 
@@ -120,10 +122,13 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Output directory (default: outputs)")
     p.add_argument("--reorder_passes", type=int, default=0,
                     help="Reorder passes for minimal nozzle travel (1=yes, 0=no)")
+    p.add_argument("--gap_extension_size", type=float, default=0.0,
+                    help="Auto-extend each pass endpoint by this distance (mm) "
+                         "in the tangent direction. 0 = disabled.")
     p.add_argument("--branchpoint_distance_threshold", type=float, default=0,
-                    help="Max distance (mm) for branchpoint connections. "
-                         "Endpoints farther than this from any other vessel "
-                         "are treated as leaf nodes. 0 = disabled (default)")
+                    help="Prevents false branches between vessels that pass close "
+                         "to each other. Good starting value: 2x nozzle diameter. "
+                         "0 = disabled (default)")
 
     return p
 
@@ -147,6 +152,8 @@ def args_to_config(args: argparse.Namespace) -> XcavateConfig:
         printer_type=PrinterType(args.printer_type),
         algorithm=PathfindingAlgorithm(args.algorithm),
         reorder_passes=bool(args.reorder_passes),
+        gap_extension_size=args.gap_extension_size,
+        convert_factor=args.convert_factor,
         scale_factor=args.scale_factor,
         top_padding=args.top_padding,
         container_x=args.container_x,

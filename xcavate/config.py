@@ -1,6 +1,7 @@
 """Configuration dataclass replacing 30+ global variables from the original xcavate.py."""
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from enum import Enum
 from typing import Optional
@@ -57,7 +58,7 @@ class XcavateConfig:
     top_padding: float = 0.0       # mm above network top
     container_x: float = 50.0      # mm
     container_y: float = 50.0      # mm
-    convert_factor: float = 10.0   # cm -> mm
+    convert_factor: float = 1.0    # unit conversion (1.0 = input in mm; 10.0 = input in cm)
 
     # --- Downsampling ---
     downsample_factor: int = 1
@@ -87,6 +88,7 @@ class XcavateConfig:
     branchpoint_distance_threshold: float = 0.0  # mm; 0 = disabled (legacy)
 
     # --- Gap closure ---
+    gap_extension_size: float = 0.0  # mm; auto-extend passes at endpoints (0 = disabled)
     num_overlap: int = 0
     overlap_algorithm: OverlapAlgorithm = OverlapAlgorithm.RETRACE
     close_sm: bool = False           # single-material gap file
@@ -131,3 +133,41 @@ class XcavateConfig:
         """Create output directories if they don't exist."""
         for d in [self.graph_dir, self.gcode_dir, self.plots_dir]:
             d.mkdir(parents=True, exist_ok=True)
+
+    def to_dict(self) -> dict:
+        """Serialize config to a JSON-safe dictionary."""
+        d = {}
+        for f in fields(self):
+            val = getattr(self, f.name)
+            if isinstance(val, Path):
+                d[f.name] = str(val)
+            elif isinstance(val, Enum):
+                d[f.name] = val.value
+            else:
+                d[f.name] = val
+        return d
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "XcavateConfig":
+        """Deserialize config from a dictionary."""
+        d = dict(d)  # copy
+        if "printer_type" in d:
+            d["printer_type"] = PrinterType(d["printer_type"])
+        if "algorithm" in d:
+            d["algorithm"] = PathfindingAlgorithm(d["algorithm"])
+        if "overlap_algorithm" in d:
+            d["overlap_algorithm"] = OverlapAlgorithm(d["overlap_algorithm"])
+        for path_field in ("network_file", "inletoutlet_file", "custom_gcode_dir",
+                           "extension_dir", "output_dir"):
+            if path_field in d and isinstance(d[path_field], str):
+                d[path_field] = Path(d[path_field])
+        known = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in d.items() if k in known}
+        return cls(**filtered)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> "XcavateConfig":
+        return cls.from_dict(json.loads(json_str))

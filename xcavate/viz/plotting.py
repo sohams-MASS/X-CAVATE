@@ -67,7 +67,7 @@ def create_network_plot(
         margin=dict(l=30, r=30, t=30, b=30),
         title_x=0.5,
     )
-    fig.update_scenes(aspectmode="cube")
+    fig.update_scenes(aspectmode="data")
 
     if output_path:
         fig.write_html(str(output_path), include_plotlyjs="cdn")
@@ -130,7 +130,7 @@ def create_original_network_plot(
         margin=dict(l=30, r=30, t=30, b=30),
         title_x=0.5,
     )
-    fig.update_scenes(aspectmode="cube")
+    fig.update_scenes(aspectmode="data")
 
     if output_path:
         fig.write_html(str(output_path), include_plotlyjs="cdn")
@@ -202,7 +202,7 @@ def create_network_plot_merged(
         margin=dict(l=30, r=30, t=30, b=30),
         title_x=0.5,
     )
-    fig.update_scenes(aspectmode="cube")
+    fig.update_scenes(aspectmode="data")
 
     if output_path:
         fig.write_html(str(output_path), include_plotlyjs="cdn")

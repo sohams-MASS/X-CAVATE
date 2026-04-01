@@ -190,8 +190,8 @@ def preprocess_coordinates(
     outlets : ndarray, shape (O, 3)
         Outlet coordinates.
     config : XcavateConfig
-        Configuration object providing ``convert_factor`` (default 10.0 for
-        cm -> mm) and ``scale_factor``.
+        Configuration object providing ``convert_factor`` (default 1.0, no
+        conversion; set to 10.0 if input is in cm) and ``scale_factor``.
 
     Returns
     -------
@@ -214,7 +214,7 @@ def preprocess_coordinates(
     else:
         num_decimals = len(first_value_str[decimal_index + 1 :])
 
-    convert = getattr(config, "convert_factor", 10.0)
+    convert = getattr(config, "convert_factor", 1.0)
     scale = getattr(config, "scale_factor", 1.0)
     factor = convert * scale
 
