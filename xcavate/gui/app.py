@@ -701,10 +701,29 @@ if cg_tab is not None:
     with cg_tab:
         st.subheader("Custom G-code Templates")
         st.caption(
-            "Paste your printer-specific G-code snippets below. These replace "
-            "the default commands for header, extrusion start/stop, pressure "
-            "control, and dwell sections in the final output file."
+            "Paste your printer-specific G-code snippets below, or upload "
+            ".txt files directly. These replace the default commands for "
+            "header, extrusion start/stop, pressure control, and dwell "
+            "sections in the final output file."
         )
+
+        with st.expander("Upload G-code files"):
+            st.markdown(
+                "Upload `.txt` files to populate the corresponding fields below. "
+                "Each file's contents will replace the current text in its field."
+            )
+            _upload_cols = st.columns(2)
+            _field_items = list(_CUSTOM_GCODE_FIELDS.items())
+            for col_idx, col in enumerate(_upload_cols):
+                with col:
+                    for key, meta in _field_items[col_idx::2]:
+                        uploaded = st.file_uploader(
+                            meta["label"],
+                            type=["txt"],
+                            key=f"upload_{key}",
+                        )
+                        if uploaded is not None:
+                            st.session_state[key] = uploaded.getvalue().decode("utf-8")
 
         cg_tabs = st.tabs(["Header", "Single Material", "Multimaterial", "Dwell"])
 
