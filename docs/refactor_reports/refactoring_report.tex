@@ -944,6 +944,74 @@ Output correctness & Reference & Numerically identical; cosmetic formatting diff
 \end{table}
 
 
+% ===== HONEST CRITIQUE =====
+\section{What Got Worse: An Honest Critique}
+
+A refactoring report that only lists improvements is not trustworthy. This section catalogs what the refactored codebase made harder, more fragile, or more burdensome compared to the original.
+
+\subsection{Simplicity Was Lost}
+
+The original was one file. You opened it, read top to bottom, and understood the entire system. There was no indirection, no inheritance hierarchy, no import chains to trace. A new contributor could \texttt{grep} for any variable and find every place it was used.
+
+The refactored code is 28 files across 7 subpackages. Finding where a specific behavior happens now requires understanding the module boundaries, the pipeline orchestration, and the class hierarchy. A newcomer asking ``where does gap closure happen?'' must navigate from \texttt{pipeline.py} to \texttt{core/gap\_closure.py} to \texttt{\_build\_indices()} and five condition functions---a trail that did not exist before.
+
+\subsection{More Code, Not Less}
+
+The refactored codebase is \textbf{larger}: 6,741 source lines + 2,364 test lines = 9,105 total, versus 5,568 in the original. The duplication was eliminated, but it was replaced with abstractions, docstrings, type annotations, and scaffolding that add their own weight. Whether this trade-off is worthwhile depends on the team---a solo developer who wrote the original may find the modular version harder to hold in their head.
+
+\subsection{Installation Complexity}
+
+The original was a single script. You ran \texttt{python xcavate.py --args} and it worked. The refactored version is an installable package requiring \texttt{pip install -e .}. As demonstrated during development, stale installations cause confusing errors (\texttt{unexpected keyword argument}) when the installed site-packages copy diverges from the local source. This is a real friction point that did not exist before.
+
+\subsection{Configuration Synchronization Burden}
+
+Adding a new parameter to the original meant adding one \texttt{argparse} line and one variable. In the refactored code, the same change requires updating \textbf{four files}: \texttt{config.py} (dataclass field), \texttt{cli.py} (argparse + mapping), \texttt{gui/app.py} (widget + config wiring), and potentially \texttt{pipeline.py}. This was demonstrated repeatedly during this session when adding \texttt{positive\_ink\_shift} and \texttt{branchpoint\_distance\_threshold}---each required coordinated edits across multiple files with several bugs introduced by missed synchronization points (e.g., \texttt{separate\_artven} undefined, widget key conflicts).
+
+\subsection{Abstraction Without Current Justification}
+
+The codebase uses 14 design patterns and 22 classes. Some of these are speculative:
+
+\begin{itemize}[leftmargin=2em]
+    \item \textbf{Strategy pattern for pathfinding:} Supports only DFS. No second algorithm exists. The abstraction adds a class hierarchy for a single implementation.
+    \item \textbf{Template Method for G-code:} Justified by 3 printer types, but the base class adds conceptual overhead for what could be three standalone functions.
+    \item \textbf{CollisionDetector class:} Wraps a KD-tree query. A function would suffice.
+\end{itemize}
+
+These abstractions anticipate future extension that may never arrive. In the meantime, they increase the cognitive cost of understanding the code.
+
+\subsection{Output Is Not Truly Byte-Identical}
+
+Despite the equivalence guarantee, the refactored code does \emph{not} produce byte-identical output. Trailing whitespace on pass headers, trailing zeros in decimal formatting (\texttt{412.094} vs \texttt{412.0940}), and G-code comment style differences mean that \texttt{diff} will report differences. While these are cosmetic and numerically meaningless, they prevent the simplest possible verification (\texttt{diff -rq}) from returning clean. For a codebase that claims equivalence as a hard constraint, this is a gap that should have been closed.
+
+\subsection{GUI State Management Is Fragile}
+
+The Streamlit GUI required multiple iterations to correctly synchronize calibrated values between tabs and the sidebar. The root cause---Streamlit's constraint that widget session state cannot be modified after widget instantiation---led to workarounds (\texttt{st.rerun()}, pre-render syncing) that are non-obvious and brittle. A future developer modifying the GUI must understand these timing constraints or risk introducing regressions that are difficult to diagnose.
+
+\subsection{Test Suite May Impede Change}
+
+The 95-test suite is valuable for catching regressions, but tests tightly coupled to implementation details (e.g., exact pass structures, specific index contents) become a maintenance burden when the underlying algorithm changes. If a future developer improves the gap closure algorithm, they may spend more time updating tests than writing code.
+
+\subsection{Summary}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Aspect} & \textbf{Original} & \textbf{Refactored} \\
+\midrule
+Files to understand & 1 & 28 \\
+Lines of code & 5,568 & 9,105 \\
+Files to edit for new parameter & 1 & 4 \\
+Installation required & No & Yes (\texttt{pip install -e .}) \\
+\texttt{diff} produces clean output & N/A & No (cosmetic differences) \\
+Design patterns to learn & 0 & 14 \\
+GUI state workarounds & 0 & 3+ (\texttt{st.rerun}, pre-render sync) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The refactoring solved real problems (crashes, performance, duplication), but it introduced its own costs. Whether the trade-off is favorable depends on the team's size, expertise, and how often the code changes. For a solo developer running small networks, the original script was arguably easier to work with.
+
+
 % ===== CONCLUSION =====
 \section{Conclusion}
 
