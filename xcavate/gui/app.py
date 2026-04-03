@@ -1122,6 +1122,89 @@ with instr_tab:
     result = st.session_state.pipeline_result
     config_saved = st.session_state.pipeline_config
 
+    def _coord_diagram(orientation: int):
+        """Create a 3D coordinate system diagram.
+        orientation=1: +x right, +y backwards, +z up
+        orientation=2: +x left, +y forwards, +z up
+        """
+        import plotly.graph_objects as go
+        fig = go.Figure()
+        L = 1.0  # axis length
+        # Axis arrows
+        colors = {"X": "red", "Y": "green", "Z": "blue"}
+        for axis, vec, color in [
+            ("X", [L, 0, 0], colors["X"]),
+            ("Y", [0, L, 0], colors["Y"]),
+            ("Z", [0, 0, L], colors["Z"]),
+        ]:
+            fig.add_trace(go.Scatter3d(
+                x=[0, vec[0]], y=[0, vec[1]], z=[0, vec[2]],
+                mode="lines+text",
+                line=dict(color=color, width=6),
+                text=["", f"+{axis}"],
+                textposition="top center",
+                textfont=dict(size=14, color=color),
+                showlegend=False,
+            ))
+        # Container outline (wireframe box)
+        cx, cy, cz = 1.2, 1.2, 0.8
+        edges = [
+            ([0,cx],[0,0],[0,0]), ([0,cx],[cy,cy],[0,0]), ([0,cx],[0,0],[cz,cz]), ([0,cx],[cy,cy],[cz,cz]),
+            ([0,0],[0,cy],[0,0]), ([cx,cx],[0,cy],[0,0]), ([0,0],[0,cy],[cz,cz]), ([cx,cx],[0,cy],[cz,cz]),
+            ([0,0],[0,0],[0,cz]), ([cx,cx],[0,0],[0,cz]), ([0,0],[cy,cy],[0,cz]), ([cx,cx],[cy,cy],[0,cz]),
+        ]
+        for ex, ey, ez in edges:
+            fig.add_trace(go.Scatter3d(
+                x=ex, y=ey, z=ez, mode="lines",
+                line=dict(color="gray", width=2), showlegend=False,
+            ))
+        # Labels
+        if orientation == 1:
+            labels = [
+                (cx/2, -0.3, -0.15, "Right (+x)"),
+                (-0.15, cy/2, -0.15, "Away from observer (+y)"),
+                (cx + 0.1, -0.15, 0, "Nozzle start (left-front corner)"),
+            ]
+            title = "+x right, +y backwards, +z up"
+            # Nozzle marker at left-front corner
+            fig.add_trace(go.Scatter3d(
+                x=[0], y=[0], z=[cz + 0.1], mode="markers",
+                marker=dict(size=8, color="black", symbol="diamond"),
+                showlegend=False,
+            ))
+            obs_y, obs_label = -0.4, "Observer"
+        else:
+            labels = [
+                (cx/2, -0.3, -0.15, "Left (+x)"),
+                (-0.15, cy/2, -0.15, "Towards observer (+y)"),
+                (-0.1, cy + 0.15, 0, "Nozzle start (right-back corner)"),
+            ]
+            title = "+x left, +y forwards, +z up"
+            fig.add_trace(go.Scatter3d(
+                x=[cx], y=[cy], z=[cz + 0.1], mode="markers",
+                marker=dict(size=8, color="black", symbol="diamond"),
+                showlegend=False,
+            ))
+            obs_y, obs_label = -0.4, "Observer"
+        # Observer marker
+        fig.add_trace(go.Scatter3d(
+            x=[cx/2], y=[obs_y], z=[0], mode="markers+text",
+            marker=dict(size=6, color="orange"),
+            text=[obs_label], textposition="bottom center",
+            textfont=dict(size=11, color="orange"),
+            showlegend=False,
+        ))
+        fig.update_layout(
+            scene=dict(
+                aspectmode="data",
+                xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False),
+            ),
+            title=dict(text=title, font=dict(size=13)),
+            margin=dict(l=0, r=0, t=30, b=0),
+            height=300,
+        )
+        return fig
+
     if result is not None and config_saved is not None:
         instructions = result.get("instructions")
         if instructions is not None:
@@ -1139,6 +1222,20 @@ with instr_tab:
             pad_cols[1].metric("Right padding", f"{pad['right']} mm")
             pad_cols[2].metric("Front padding", f"{pad['front']} mm")
             pad_cols[3].metric("Back padding", f"{pad['back']} mm")
+
+            # Coordinate system diagrams
+            with st.expander("Coordinate System Reference", expanded=False):
+                st.markdown(
+                    "The diagrams below show the two possible coordinate system "
+                    "orientations. The **black diamond** marks where the nozzle "
+                    "should be positioned before starting. The **orange dot** "
+                    "marks the observer's position."
+                )
+                diag_cols = st.columns(2)
+                with diag_cols[0]:
+                    st.plotly_chart(_coord_diagram(1), use_container_width=True)
+                with diag_cols[1]:
+                    st.plotly_chart(_coord_diagram(2), use_container_width=True)
 
             if config_saved.multimaterial:
                 with st.expander("Multimaterial Calibration", expanded=True):
