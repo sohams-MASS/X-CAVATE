@@ -55,8 +55,8 @@ class PositiveInkGcodeWriter(GcodeWriter):
             f.write(f"G92 {cfg.axis_1}{z} {cfg.axis_2}{z} {cfg.printhead_1}{0} {cfg.printhead_2}{0} \n")
             f.write("; moving to ARTERIAL \n")
             f.write("G90 \n")
-            f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.amount_up} "
+                    f"{cfg.axis_2}{cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G91 \n")
             f.write(f"G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             y_off = cfg.offset_y if cfg.front_nozzle == 1 else -cfg.offset_y
@@ -75,7 +75,7 @@ class PositiveInkGcodeWriter(GcodeWriter):
             f.write("; Print Pass 0 \n")
             f.write(f"G92 X{x} Y{y} {cfg.axis_1}{z} {cfg.axis_2}{z} \n")
             f.write("G90 \n")
-            f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             if cfg.custom_gcode and self.codes:
                 f.write("G91 \n")
                 self._write_custom(f, self.codes.start_extrusion_ph2)
@@ -94,8 +94,8 @@ class PositiveInkGcodeWriter(GcodeWriter):
             self._curr_axis = cfg.axis_1
             self._curr_ph = cfg.printhead_1
             f.write("; moving to ARTERIAL \n")
-            f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.amount_up} "
+                    f"{cfg.axis_2}{cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G91 \n")
             f.write(f"G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             f.write(f"G1 Y{y_to_art} F{self._f_speed(cfg.jog_speed)} \n")
@@ -114,8 +114,8 @@ class PositiveInkGcodeWriter(GcodeWriter):
             self._curr_axis = cfg.axis_2
             self._curr_ph = cfg.printhead_2
             f.write("; moving to VENOUS \n")
-            f.write(f"G1 {cfg.axis_1}{cfg.container_height + cfg.amount_up} "
-                    f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
+            f.write(f"G1 {cfg.axis_1}{cfg.amount_up} "
+                    f"{cfg.axis_2}{cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G91 \n")
             f.write(f"G1 X{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             f.write(f"G1 Y{y_to_ven} F{self._f_speed(cfg.jog_translation)} \n")
