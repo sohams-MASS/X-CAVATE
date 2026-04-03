@@ -99,19 +99,16 @@ with st.sidebar:
 
     st.divider()
     st.header("Scene")
-    _scene_cols = st.columns(2)
-    with _scene_cols[0]:
-        scene_upload = st.file_uploader("Load scene", type=["json"], key="scene_upload",
-                                         label_visibility="collapsed")
-    with _scene_cols[1]:
-        if st.session_state.get("pipeline_config") is not None:
-            cfg_dict = st.session_state.pipeline_config.to_dict()
-            for k in ("network_file", "inletoutlet_file", "custom_gcode_dir", "extension_dir", "output_dir"):
-                cfg_dict.pop(k, None)
-            import json as _json
-            scene_json = _json.dumps({"version": 1, "config": cfg_dict}, indent=2)
-            st.download_button("Save scene", data=scene_json,
-                               file_name="xcavate_scene.json", mime="application/json")
+    scene_upload = st.file_uploader("Load scene (.json)", type=["json"], key="scene_upload")
+    if st.session_state.get("pipeline_config") is not None:
+        cfg_dict = st.session_state.pipeline_config.to_dict()
+        for k in ("network_file", "inletoutlet_file", "custom_gcode_dir", "extension_dir", "output_dir"):
+            cfg_dict.pop(k, None)
+        import json as _json
+        scene_json = _json.dumps({"version": 1, "config": cfg_dict}, indent=2)
+        st.download_button("Save scene", data=scene_json,
+                           file_name="xcavate_scene.json", mime="application/json",
+                           use_container_width=True)
 
     if scene_upload is not None and "scene_loaded" not in st.session_state:
         import json as _json
