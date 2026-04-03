@@ -425,14 +425,18 @@ with st.sidebar:
             format="%.1f",
             help="Speed for rapid travel moves between nozzles during multimaterial printhead switching.",
         )
-        resting_pressure = st.number_input(
-            "Resting pressure (psi)", min_value=0.0, value=0.0, step=0.5, format="%.1f",
-            help="Pneumatic pressure (psi) applied to the inactive printhead during multimaterial printing.",
-        )
-        active_pressure = st.number_input(
-            "Active pressure (psi)", min_value=0.0, value=5.0, step=0.5, format="%.1f",
-            help="Pneumatic pressure (psi) applied to the active printhead during extrusion.",
-        )
+        if printer_type == PrinterType.PRESSURE:
+            resting_pressure = st.number_input(
+                "Resting pressure (psi)", min_value=0.0, value=0.0, step=0.5, format="%.1f",
+                help="Pneumatic pressure (psi) applied to the inactive printhead during multimaterial printing.",
+            )
+            active_pressure = st.number_input(
+                "Active pressure (psi)", min_value=0.0, value=5.0, step=0.5, format="%.1f",
+                help="Pneumatic pressure (psi) applied to the active printhead during extrusion.",
+            )
+        else:
+            resting_pressure = 0.0
+            active_pressure = 5.0
 
     # -- Positive Ink Displacement (only shown for Positive Ink printer) --
     if printer_type == PrinterType.POSITIVE_INK:
