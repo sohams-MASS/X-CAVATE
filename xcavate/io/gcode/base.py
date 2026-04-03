@@ -85,6 +85,13 @@ class GcodeWriter(ABC):
         """Convert speed from mm/s (config units) to mm/min (G-code F parameter)."""
         return round(speed_mm_s * 60.0, self.config.num_decimals)
 
+    def _z_axis(self) -> str:
+        """Return the current Z-axis name for G-code output.
+
+        Multimaterial subclasses set ``_curr_axis``; single-material uses axis_1.
+        """
+        return getattr(self, "_curr_axis", self.config.axis_1)
+
     def write(
         self,
         output_path: Path,
@@ -169,7 +176,7 @@ class GcodeWriter(ABC):
                 ext = gap_extensions[i]
                 f.write(";##### Extra segment #####\n")
                 f.write("G91\n")
-                f.write(f"G1 X{ext.delta_x} Y{ext.delta_y} Z{ext.delta_z} F{speed}\n")
+                f.write(f"G1 X{ext.delta_x} Y{ext.delta_y} {self._z_axis()}{ext.delta_z} F{speed}\n")
                 f.write("G90\n")
                 f.write(";########################\n")
                 gap_tracker += 1
