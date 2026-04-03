@@ -106,7 +106,6 @@ with st.sidebar:
     with _scene_cols[1]:
         if st.session_state.get("pipeline_config") is not None:
             cfg_dict = st.session_state.pipeline_config.to_dict()
-            # Exclude file paths (upload-based)
             for k in ("network_file", "inletoutlet_file", "custom_gcode_dir", "extension_dir", "output_dir"):
                 cfg_dict.pop(k, None)
             import json as _json
@@ -117,10 +116,14 @@ with st.sidebar:
     if scene_upload is not None and "scene_loaded" not in st.session_state:
         import json as _json
         scene_data = _json.loads(scene_upload.getvalue())
-        for key, val in scene_data.get("config", {}).items():
-            st.session_state[f"scene_{key}"] = val
+        st.session_state["_scene_values"] = scene_data.get("config", {})
         st.session_state["scene_loaded"] = True
         st.rerun()
+
+    def _scene_val(key, default):
+        """Read a value from loaded scene, falling back to default."""
+        vals = st.session_state.get("_scene_values", {})
+        return vals.get(key, default)
 
     st.divider()
     st.header("Required Parameters")
@@ -130,10 +133,12 @@ with st.sidebar:
         "Positive Ink": PrinterType.POSITIVE_INK,
         "Aerotech": PrinterType.AEROTECH,
     }
+    _printer_type_val = _scene_val("printer_type", 0)
+    _printer_index = {0: 0, 1: 1, 2: 2}.get(_printer_type_val, 0)
     printer_label = st.selectbox(
         "Printer type",
         options=list(_printer_labels.keys()),
-        index=0,
+        index=_printer_index,
         help="Hardware target: Pressure (pneumatic extrusion), Positive Ink (displacement pump), or Aerotech (6-axis motion controller).",
     )
     printer_type = _printer_labels[printer_label]
@@ -146,7 +151,7 @@ with st.sidebar:
         nozzle_diameter = st.number_input(
             "Nozzle diameter (mm)",
             min_value=0.001,
-            value=0.5,
+            value=_scene_val("nozzle_diameter", 0.5),
             step=0.01,
             format="%.3f",
             help="Inner diameter of the print nozzle in millimeters.",
@@ -157,7 +162,7 @@ with st.sidebar:
     container_height = st.number_input(
         "Container height (mm)",
         min_value=0.1,
-        value=10.0,
+        value=_scene_val("container_height", 10.0),
         step=0.5,
         format="%.1f",
         help="Height of the print container in millimeters.",
@@ -166,21 +171,21 @@ with st.sidebar:
         "Decimal places",
         min_value=0,
         max_value=10,
-        value=3,
+        value=_scene_val("num_decimals", 3),
         step=1,
         help="Number of decimal places for output rounding.",
     )
     amount_up = st.number_input(
         "Amount up (mm)",
         min_value=0.0,
-        value=10.0,
+        value=_scene_val("amount_up", 10.0),
         step=0.5,
         format="%.1f",
         help="Distance to raise nozzle above the container between passes.",
     )
 
     multimaterial = st.toggle(
-        "Multimaterial", value=False,
+        "Multimaterial", value=_scene_val("multimaterial", False),
         help="Enable two-nozzle arterial/venous printing. Requires a 5-column input file (x, y, z, radius, artven flag).",
     )
 
@@ -287,7 +292,7 @@ with st.sidebar:
         print_speed = st.number_input(
             "Print speed (mm/s)",
             min_value=0.001,
-            value=1.0,
+            value=_scene_val("print_speed", 1.0),
             step=0.1,
             format="%.3f",
             help="Nozzle travel speed during extrusion. Typical range: 0.5–5.0 mm/s depending on ink viscosity.",
@@ -295,7 +300,7 @@ with st.sidebar:
         flow = st.number_input(
             "Flow (mm^3/s)",
             min_value=0.0,
-            value=0.1609429886081009,
+            value=_scene_val("flow", 0.1609429886081009),
             step=0.001,
             format="%.16f",
             help="Volumetric flow rate used for speed calculation mode. Also used to compute per-node print speed when 'Speed calculation' is on.",
@@ -303,7 +308,7 @@ with st.sidebar:
         jog_speed = st.number_input(
             "Jog speed (mm/s)",
             min_value=0.001,
-            value=5.0,
+            value=_scene_val("jog_speed", 5.0),
             step=0.5,
             format="%.2f",
             help="Speed for rapid non-printing travel moves between passes.",
@@ -311,7 +316,7 @@ with st.sidebar:
         jog_speed_lift = st.number_input(
             "Jog speed lift (mm/s)",
             min_value=0.001,
-            value=0.25,
+            value=_scene_val("jog_speed_lift", 0.25),
             step=0.01,
             format="%.2f",
             help="Speed for the gentle vertical lift at the end of each pass before rapid retraction.",
@@ -319,7 +324,7 @@ with st.sidebar:
         initial_lift = st.number_input(
             "Initial lift (mm)",
             min_value=0.0,
-            value=0.5,
+            value=_scene_val("initial_lift", 0.5),
             step=0.1,
             format="%.2f",
             help="Height the nozzle lifts after finishing a pass before traveling to the next one.",
@@ -348,20 +353,20 @@ with st.sidebar:
     # -- Geometry --
     with st.expander("Geometry"):
         container_x = st.number_input(
-            "Container X (mm)", min_value=0.0, value=50.0, step=1.0, format="%.1f",
+            "Container X (mm)", min_value=0.0, value=_scene_val("container_x", 50.0), step=1.0, format="%.1f",
             help="Width of the print container (mm). Used to calculate centering instructions for the operator.",
         )
         container_y = st.number_input(
-            "Container Y (mm)", min_value=0.0, value=50.0, step=1.0, format="%.1f",
+            "Container Y (mm)", min_value=0.0, value=_scene_val("container_y", 50.0), step=1.0, format="%.1f",
             help="Depth of the print container (mm). Used to calculate centering instructions for the operator.",
         )
         convert_factor = st.number_input(
-            "Unit conversion factor", min_value=0.001, value=1.0, step=0.1, format="%.3f",
+            "Unit conversion factor", min_value=0.001, value=_scene_val("convert_factor", 1.0), step=0.1, format="%.3f",
             help="Multiplier for input coordinate units. Use 1.0 if input is in mm (default). "
                  "Use 10.0 if input is in cm.",
         )
         scale_factor = st.number_input(
-            "Scale factor", min_value=0.001, value=1.0, step=0.1, format="%.3f",
+            "Scale factor", min_value=0.001, value=_scene_val("scale_factor", 1.0), step=0.1, format="%.3f",
             help="Multiplier applied to all coordinates after unit conversion. Use 1.0 for no scaling.",
         )
         top_padding = st.number_input(
