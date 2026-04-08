@@ -56,7 +56,7 @@ class XcavateConfig:
     custom_gcode: bool = False
     printer_type: PrinterType = PrinterType.PRESSURE
     speed_unit: SpeedUnit = SpeedUnit.MM_PER_MIN
-    automation1: bool = False            # Automation1 Aerotech program wrapper
+    automation1: bool = True             # Automation1 Aerotech program wrapper
     algorithm: PathfindingAlgorithm = PathfindingAlgorithm.DFS
     reorder_passes: bool = False
 

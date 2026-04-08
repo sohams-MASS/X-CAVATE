@@ -358,8 +358,8 @@ with st.sidebar:
                 help="Pause duration (seconds) after the nozzle stops moving, before extrusion is turned off. Allows pressure bleed-off.",
             )
             automation1 = st.toggle(
-                "Automation1 Aerotech",
-                value=_scene_val("automation1", False),
+                "Use Automation1 binary",
+                value=_scene_val("automation1", True),
                 help="Wrap G-code in Automation1 program structure with variable-relative coordinates, "
                      "VelocityBlending/CornerRounding, and DriveBrakeOn/Off functions for pressure dispensing.",
             )
