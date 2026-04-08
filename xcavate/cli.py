@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from xcavate.config import OverlapAlgorithm, PathfindingAlgorithm, PrinterType, XcavateConfig
+from xcavate.config import OverlapAlgorithm, PathfindingAlgorithm, PrinterType, SpeedUnit, XcavateConfig
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -48,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="Providing custom G-code? (1=yes, 0=no)")
     p.add_argument("--printer_type", type=int, required=True, default=0,
                     help="Type of printer: 0=Pressure, 1=Positive Ink, 2=Aerotech")
+    p.add_argument("--speed_unit", type=str, default="mm/min",
+                    choices=["mm/min", "mm/s"],
+                    help="G-code feedrate unit: mm/min (default) or mm/s (Aerotech)")
+    p.add_argument("--automation1", type=int, default=0,
+                    help="Automation1 Aerotech program wrapper (1=yes, 0=no)")
 
     # --- Geometry ---
     p.add_argument("--container_x", type=float, default=50, help="Container x-dimension (mm)")
@@ -150,6 +155,8 @@ def args_to_config(args: argparse.Namespace) -> XcavateConfig:
         downsample=bool(args.downsample),
         custom_gcode=bool(args.custom),
         printer_type=PrinterType(args.printer_type),
+        speed_unit=SpeedUnit(args.speed_unit if args.speed_unit != "mm/min" or args.printer_type != 2 else "mm/s"),
+        automation1=bool(args.automation1),
         algorithm=PathfindingAlgorithm(args.algorithm),
         reorder_passes=bool(args.reorder_passes),
         gap_extension_size=args.gap_extension_size,

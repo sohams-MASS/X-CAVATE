@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, TextIO
 import numpy as np
 
-from xcavate.config import XcavateConfig
+from xcavate.config import SpeedUnit, XcavateConfig
 
 
 @dataclass
@@ -82,7 +82,9 @@ class GcodeWriter(ABC):
         self.codes = custom_codes
 
     def _f_speed(self, speed_mm_s: float) -> float:
-        """Convert speed from mm/s (config units) to mm/min (G-code F parameter)."""
+        """Convert speed from mm/s (config units) to G-code F parameter units."""
+        if self.config.speed_unit == SpeedUnit.MM_PER_S:
+            return round(speed_mm_s, self.config.num_decimals)
         return round(speed_mm_s * 60.0, self.config.num_decimals)
 
     def _z_axis(self) -> str:

@@ -381,6 +381,9 @@ def _create_gcode_writer(config: XcavateConfig, custom_codes):
     elif config.printer_type == PrinterType.POSITIVE_INK:
         return PositiveInkGcodeWriter(config, custom_codes)
     elif config.printer_type == PrinterType.AEROTECH:
+        if config.automation1:
+            from xcavate.io.gcode.automation1 import Automation1GcodeWriter
+            return Automation1GcodeWriter(config, custom_codes)
         return AerotechGcodeWriter(config, custom_codes)
     else:
         raise ValueError(f"Unknown printer type: {config.printer_type}")

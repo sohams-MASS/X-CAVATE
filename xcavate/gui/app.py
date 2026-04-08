@@ -18,7 +18,7 @@ from typing import Optional
 
 import streamlit as st
 
-from xcavate.config import OverlapAlgorithm, PathfindingAlgorithm, PrinterType, XcavateConfig
+from xcavate.config import OverlapAlgorithm, PathfindingAlgorithm, PrinterType, SpeedUnit, XcavateConfig
 
 # ---------------------------------------------------------------------------
 # Page configuration
@@ -139,6 +139,20 @@ with st.sidebar:
         help="Hardware target: Pressure (pneumatic extrusion), Positive Ink (displacement pump), or Aerotech (6-axis motion controller).",
     )
     printer_type = _printer_labels[printer_label]
+
+    _speed_unit_labels = {
+        "mm/min": SpeedUnit.MM_PER_MIN,
+        "mm/s": SpeedUnit.MM_PER_S,
+    }
+    _speed_unit_default = "mm/s" if printer_type == PrinterType.AEROTECH else _scene_val("speed_unit", "mm/min")
+    _speed_unit_index = 1 if _speed_unit_default == "mm/s" else 0
+    speed_unit_label = st.selectbox(
+        "G-code speed unit",
+        options=list(_speed_unit_labels.keys()),
+        index=_speed_unit_index,
+        help="Unit for F (feedrate) values in generated G-code. Most printers use mm/min; Aerotech uses mm/s.",
+    )
+    speed_unit = _speed_unit_labels[speed_unit_label]
 
     _hide_nozzle = (
         printer_type == PrinterType.POSITIVE_INK
@@ -343,9 +357,16 @@ with st.sidebar:
                 format="%.3f",
                 help="Pause duration (seconds) after the nozzle stops moving, before extrusion is turned off. Allows pressure bleed-off.",
             )
+            automation1 = st.toggle(
+                "Automation1 Aerotech",
+                value=_scene_val("automation1", False),
+                help="Wrap G-code in Automation1 program structure with variable-relative coordinates, "
+                     "VelocityBlending/CornerRounding, and DriveBrakeOn/Off functions for pressure dispensing.",
+            )
         else:
             dwell_start = 0.08
             dwell_end = 0.08
+            automation1 = False
 
     # -- Geometry --
     with st.expander("Geometry"):
@@ -403,21 +424,34 @@ with st.sidebar:
             step=1,
             help="1 = venous nozzle in front, 2 = venous nozzle behind.",
         )
-        printhead_1 = st.text_input(
-            "Printhead 1 name", value="Aa",
-            help="Axis designation for the arterial printhead in G-code commands (e.g. 'Aa').",
-        )
-        printhead_2 = st.text_input(
-            "Printhead 2 name", value="Ab",
-            help="Axis designation for the venous printhead in G-code commands (e.g. 'Ab').",
-        )
+        if printer_type == PrinterType.POSITIVE_INK:
+            printhead_1 = st.text_input(
+                "Printhead 1 name", value="Aa",
+                help="Extrusion axis designation for the arterial printhead in G-code commands (e.g. 'Aa').",
+            )
+            printhead_2 = st.text_input(
+                "Printhead 2 name", value="Ab",
+                help="Extrusion axis designation for the venous printhead in G-code commands (e.g. 'Ab').",
+            )
+        elif printer_type == PrinterType.AEROTECH:
+            printhead_1 = st.text_input(
+                "Dispensing axis 1 name", value="Aa",
+                help="Aerotech axis name for arterial pressure dispensing (used in Enable/BRAKE commands).",
+            )
+            printhead_2 = st.text_input(
+                "Dispensing axis 2 name", value="Ab",
+                help="Aerotech axis name for venous pressure dispensing (used in Enable/BRAKE commands).",
+            )
+        else:
+            printhead_1 = "Aa"
+            printhead_2 = "Ab"
         axis_1 = st.text_input(
             "Axis 1 name", value="A",
-            help="Z-axis letter for the arterial printhead (e.g. 'A'). Must match the motion controller configuration.",
+            help="Z-axis letter for the arterial side (e.g. 'A'). Must match the motion controller configuration.",
         )
         axis_2 = st.text_input(
             "Axis 2 name", value="B",
-            help="Z-axis letter for the venous printhead (e.g. 'B'). Must match the motion controller configuration.",
+            help="Z-axis letter for the venous side (e.g. 'B'). Must match the motion controller configuration.",
         )
         jog_translation = st.number_input(
             "Jog translation speed (mm/s)",
@@ -427,14 +461,14 @@ with st.sidebar:
             format="%.1f",
             help="Speed for rapid travel moves between nozzles during multimaterial printhead switching.",
         )
-        if printer_type == PrinterType.PRESSURE:
+        if printer_type in (PrinterType.PRESSURE, PrinterType.AEROTECH):
             resting_pressure = st.number_input(
                 "Resting pressure (psi)", min_value=0.0, value=0.0, step=0.5, format="%.1f",
-                help="Pneumatic pressure (psi) applied to the inactive printhead during multimaterial printing.",
+                help="Pneumatic pressure (psi) applied to the inactive nozzle during multimaterial printing.",
             )
             active_pressure = st.number_input(
                 "Active pressure (psi)", min_value=0.0, value=5.0, step=0.5, format="%.1f",
-                help="Pneumatic pressure (psi) applied to the active printhead during extrusion.",
+                help="Pneumatic pressure (psi) applied to the active nozzle during extrusion.",
             )
         else:
             resting_pressure = 0.0
@@ -552,6 +586,8 @@ def _build_config(
         num_decimals=num_decimals,
         amount_up=amount_up,
         printer_type=printer_type,
+        speed_unit=speed_unit,
+        automation1=automation1,
         multimaterial=multimaterial,
         tolerance_flag=tolerance_flag,
         tolerance=tolerance,

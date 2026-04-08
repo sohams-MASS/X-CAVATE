@@ -7,6 +7,12 @@ from enum import Enum
 from typing import Optional
 
 
+class SpeedUnit(Enum):
+    """Speed units for G-code F parameter."""
+    MM_PER_MIN = "mm/min"   # Most G-code printers
+    MM_PER_S = "mm/s"       # Aerotech and some controllers
+
+
 class PrinterType(Enum):
     """Supported printer types for G-code generation."""
     PRESSURE = 0        # Pressure-based extrusion
@@ -49,6 +55,8 @@ class XcavateConfig:
     downsample: bool = False
     custom_gcode: bool = False
     printer_type: PrinterType = PrinterType.PRESSURE
+    speed_unit: SpeedUnit = SpeedUnit.MM_PER_MIN
+    automation1: bool = False            # Automation1 Aerotech program wrapper
     algorithm: PathfindingAlgorithm = PathfindingAlgorithm.DFS
     reorder_passes: bool = False
 
@@ -156,6 +164,8 @@ class XcavateConfig:
         d = dict(d)  # copy
         if "printer_type" in d:
             d["printer_type"] = PrinterType(d["printer_type"])
+        if "speed_unit" in d:
+            d["speed_unit"] = SpeedUnit(d["speed_unit"])
         if "algorithm" in d:
             d["algorithm"] = PathfindingAlgorithm(d["algorithm"])
         if "overlap_algorithm" in d:
