@@ -72,7 +72,7 @@ class Automation1GcodeWriter(GcodeWriter):
             f.write(f"      var $X_start as real = 0\n")
             f.write(f"      var $Y_start as real = 0\n")
             f.write(f"      var $Z_print as real = 0\n")
-            f.write(f"      var $Z_safe as real = $Z_print + {cfg.amount_up}\n")
+            f.write(f"      var $Z_safe as real = $Z_print + {cfg.container_height + cfg.amount_up}\n")
             f.write(f"      var $jog_speed as real = {cfg.jog_speed}\n")
             if mm:
                 f.write(f"      var $offset_x as real = {cfg.offset_x}\n")
