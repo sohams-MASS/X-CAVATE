@@ -416,6 +416,10 @@ with st.sidebar:
             "Offset Y (mm)", value=0.5, step=0.1, format="%.1f",
             help="Vertical fine-tuning offset (mm) between the two printheads.",
         )
+        offset_z = st.number_input(
+            "Offset Z (mm)", value=0.0, step=0.1, format="%.2f",
+            help="Z-height offset (mm) between the two nozzles. Applied during nozzle switches to compensate for tip height differences.",
+        )
         front_nozzle = st.number_input(
             "Front nozzle",
             min_value=1,
@@ -607,6 +611,7 @@ def _build_config(
         downsample_factor=downsample_factor,
         offset_x=offset_x,
         offset_y=offset_y,
+        offset_z=offset_z,
         front_nozzle=front_nozzle,
         printhead_1=printhead_1,
         printhead_2=printhead_2,

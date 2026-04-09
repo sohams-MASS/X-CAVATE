@@ -33,6 +33,8 @@ class PressureGcodeWriter(GcodeWriter):
                         f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
                 f.write(f"G91 G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
                 f.write(f"G91 G1 Y{y_to_ven} F{self._f_speed(cfg.jog_speed)} \n")
+                if cfg.offset_z:
+                    f.write(f"G91 G1 {cfg.axis_2}{cfg.offset_z} F{self._f_speed(cfg.jog_speed)} \n")
                 f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
                         f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
                 f.write("G90 \n")
@@ -93,6 +95,8 @@ class PressureGcodeWriter(GcodeWriter):
                     f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 X{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             f.write(f"G91 G1 Y{y_to_art} F{self._f_speed(cfg.jog_speed)} \n")
+            if cfg.offset_z:
+                f.write(f"G91 G1 {cfg.axis_1}-{cfg.offset_z} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
                     f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} \n")
             f.write("G90 \n")
@@ -113,6 +117,8 @@ class PressureGcodeWriter(GcodeWriter):
                     f"{cfg.axis_2}{cfg.container_height + cfg.amount_up} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             f.write(f"G91 G1 Y{y_to_ven} F{self._f_speed(cfg.jog_speed)} \n")
+            if cfg.offset_z:
+                f.write(f"G91 G1 {cfg.axis_2}{cfg.offset_z} F{self._f_speed(cfg.jog_speed)} \n")
             f.write(f"G91 G1 {cfg.axis_1}-{cfg.container_height + cfg.amount_up} "
                     f"{cfg.axis_2}-{cfg.container_height + cfg.amount_up} \n")
             f.write("G90 \n")

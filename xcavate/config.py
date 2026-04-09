@@ -84,6 +84,7 @@ class XcavateConfig:
     # --- Multimaterial ---
     offset_x: float = 103.0          # mm between printheads in x
     offset_y: float = 0.5            # mm between printheads in y
+    offset_z: float = 0.0            # mm between printheads in z
     front_nozzle: int = 1            # 1=venous in front, 2=venous behind
     printhead_1: str = "Aa"          # arterial printhead name
     printhead_2: str = "Ab"          # venous printhead name

@@ -84,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     # --- Multimaterial ---
     p.add_argument("--offset_x", type=float, default=103, help="Printhead x-offset (mm)")
     p.add_argument("--offset_y", type=float, default=0.5, help="Printhead y-offset (mm)")
+    p.add_argument("--offset_z", type=float, default=0.0, help="Printhead z-offset (mm)")
     p.add_argument("--front_nozzle", type=int, default=1,
                     help="1 if venous nozzle in front, 2 if behind")
     p.add_argument("--printhead_1", type=str, default="Aa", help="Arterial printhead name")
@@ -176,6 +177,7 @@ def args_to_config(args: argparse.Namespace) -> XcavateConfig:
         dwell_end=args.dwell_end,
         offset_x=args.offset_x,
         offset_y=args.offset_y,
+        offset_z=args.offset_z,
         front_nozzle=args.front_nozzle,
         printhead_1=args.printhead_1,
         printhead_2=args.printhead_2,

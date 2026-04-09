@@ -61,6 +61,8 @@ class PositiveInkGcodeWriter(GcodeWriter):
             f.write(f"G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             y_off = cfg.offset_y if cfg.front_nozzle == 1 else -cfg.offset_y
             f.write(f"G1 Y{y_off} F{self._f_speed(cfg.jog_translation)} \n")
+            if cfg.offset_z:
+                f.write(f"G1 {cfg.axis_1}{cfg.offset_z} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{x} Y{y} \n")
             f.write(f"G1 {cfg.axis_1}{z} F{self._f_speed(cfg.jog_speed)} \n")
@@ -99,6 +101,8 @@ class PositiveInkGcodeWriter(GcodeWriter):
             f.write("G91 \n")
             f.write(f"G1 X-{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             f.write(f"G1 Y{y_to_art} F{self._f_speed(cfg.jog_speed)} \n")
+            if cfg.offset_z:
+                f.write(f"G1 {cfg.axis_1}-{cfg.offset_z} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{prev_x} Y{prev_y} \n")
             f.write(f"G1 X{x} Y{y} \n")
@@ -119,6 +123,8 @@ class PositiveInkGcodeWriter(GcodeWriter):
             f.write("G91 \n")
             f.write(f"G1 X{cfg.offset_x} F{self._f_speed(cfg.jog_translation)} \n")
             f.write(f"G1 Y{y_to_ven} F{self._f_speed(cfg.jog_translation)} \n")
+            if cfg.offset_z:
+                f.write(f"G1 {cfg.axis_2}{cfg.offset_z} F{self._f_speed(cfg.jog_speed)} \n")
             f.write("G90 \n")
             f.write(f"G92 X{prev_x} Y{prev_y} \n")
             f.write(f"G1 X{x} Y{y} \n")
