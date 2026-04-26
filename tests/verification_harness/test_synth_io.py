@@ -1,6 +1,5 @@
 """Tests for the inlet/outlet synthesizer."""
 import textwrap
-from pathlib import Path
 
 from .synth_io import (
     synthesize_inletoutlet,
