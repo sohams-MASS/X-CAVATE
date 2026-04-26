@@ -1,8 +1,7 @@
 """Tests for the G-code parser."""
-from pathlib import Path
 import textwrap
 
-from tests.verification_harness.parse_gcode import Move, parse, parse_text
+from .parse_gcode import parse, parse_text
 
 
 SAMPLE = textwrap.dedent("""\

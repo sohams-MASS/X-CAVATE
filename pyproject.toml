@@ -29,5 +29,9 @@ xcavate = "xcavate.cli:main"
 [tool.pytest.ini_options]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 
+[tool.pyright]
+include = ["xcavate", "tests"]
+extraPaths = ["."]
+
 [tool.setuptools.packages.find]
 include = ["xcavate*"]

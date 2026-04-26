@@ -55,7 +55,10 @@ def parse_text(text: str) -> list[Move]:
         if not tokens:
             continue
         cmd = tokens[0].upper()
-        coords = {"X": None, "Y": None, "Z": None, "A": None, "B": None, "F": None, "E": None, "P": None}
+        coords: dict[str, float | None] = {
+            "X": None, "Y": None, "Z": None, "A": None, "B": None,
+            "F": None, "E": None, "P": None,
+        }
         for tok in tokens[1:]:
             parsed = _coerce(tok)
             if parsed is None:
