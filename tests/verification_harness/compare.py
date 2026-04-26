@@ -116,6 +116,13 @@ def _e_dev(a: Move, b: Move) -> float:
     return abs(a.e - b.e)
 
 
+def _first_g1_index(moves: list[Move]) -> int:
+    for i, m in enumerate(moves):
+        if m.cmd == "G1":
+            return i
+    return len(moves)
+
+
 def numerical_diff(
     moves_a: list[Move],
     moves_b: list[Move],
@@ -125,16 +132,33 @@ def numerical_diff(
     eps_f: float = 1e-2,
     eps_e: float = 1e-3,
     max_listed: int = 20,
+    align_on_first_g1: bool = False,
 ) -> DiffReport:
-    n = min(len(moves_a), len(moves_b))
-    aligned = len(moves_a) == len(moves_b)
+    """Pairwise numerical diff.
+
+    When ``align_on_first_g1`` is true, both streams are advanced past their
+    leading non-G1 preamble (G90/G92/...) so that off-by-one preamble
+    differences don't shift every subsequent index. Indices in
+    ``first_divergences`` are relative to the post-skip stream of A.
+    """
+    if align_on_first_g1:
+        skip_a = _first_g1_index(moves_a)
+        skip_b = _first_g1_index(moves_b)
+    else:
+        skip_a = skip_b = 0
+
+    a_view = moves_a[skip_a:]
+    b_view = moves_b[skip_b:]
+
+    n = min(len(a_view), len(b_view))
+    aligned = len(a_view) == len(b_view)
     max_xyz = 0.0
     max_f = 0.0
     max_e = 0.0
     out = 0
     first: list[tuple[int, str, str]] = []
     for i in range(n):
-        a, b = moves_a[i], moves_b[i]
+        a, b = a_view[i], b_view[i]
         xyz = _xyz_dev(a, b)
         f = _f_dev(a, b)
         e = _e_dev(a, b)

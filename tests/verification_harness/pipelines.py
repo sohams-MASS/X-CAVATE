@@ -46,7 +46,10 @@ CANONICAL_PARAMS: dict = {
     "container_z": 50.0,
     "print_speed": 1.0,
     "jog_speed": 5.0,
-    "flow": 0.1272265034574846,
+    # Match x1130's hardcoded flow (script line 3705) so feedrate diffs don't
+    # absorb a constant 1.265× multiplier. main honors --flow; x1130 ignores
+    # its own --flow argument and uses 0.1609429886081009 unconditionally.
+    "flow": 0.1609429886081009,
     "dwell_start": 0.08,
     "dwell_end": 0.08,
     "tolerance_flag": 0,

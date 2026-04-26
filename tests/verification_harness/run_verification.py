@@ -116,7 +116,10 @@ def run_case(case: Case, *, timeout: int) -> tuple[dict, dict]:
     names = list(parsed_moves)
     for i, a in enumerate(names):
         for b in names[i + 1 :]:
-            diffs[(a, b)] = numerical_diff(parsed_moves[a], parsed_moves[b], pair=(a, b))
+            diffs[(a, b)] = numerical_diff(
+                parsed_moves[a], parsed_moves[b], pair=(a, b),
+                align_on_first_g1=True,
+            )
 
     write_case_report(case_dir, case.slug, results, diffs)
     return results, diffs
