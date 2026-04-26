@@ -21,10 +21,9 @@ class Move:
 
 
 def _strip_comment(line: str) -> str:
-    for marker in (";", "("):
-        idx = line.find(marker)
-        if idx >= 0:
-            line = line[:idx]
+    idx = line.find(";")
+    if idx >= 0:
+        line = line[:idx]
     return line.strip()
 
 
@@ -55,11 +54,21 @@ def parse_text(text: str) -> list[Move]:
         if not tokens:
             continue
         cmd = tokens[0].upper()
+        arg_start = 1
+        if len(tokens) >= 2:
+            second = tokens[1]
+            if (
+                len(second) >= 2
+                and second[0].upper() in ("G", "M")
+                and second[1:].replace(".", "").isdigit()
+            ):
+                cmd = second.upper()
+                arg_start = 2
         coords: dict[str, float | None] = {
             "X": None, "Y": None, "Z": None, "A": None, "B": None,
             "F": None, "E": None, "P": None,
         }
-        for tok in tokens[1:]:
+        for tok in tokens[arg_start:]:
             parsed = _coerce(tok)
             if parsed is None:
                 continue
@@ -77,5 +86,5 @@ def parse_text(text: str) -> list[Move]:
     return moves
 
 
-def parse(path: Path) -> list[Move]:
+def parse(path: str | Path) -> list[Move]:
     return parse_text(Path(path).read_text())

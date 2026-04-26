@@ -57,3 +57,20 @@ def test_unknown_token_keeps_cmd_drops_coords():
     assert len(moves) == 1
     assert moves[0].cmd == "M104"
     assert moves[0].x is None
+
+
+def test_negative_coords_parse():
+    moves = parse_text("G1 X-1.5 Y-2.0 Z-3 F60\n")
+    assert moves[0].x == -1.5
+    assert moves[0].y == -2.0
+    assert moves[0].z == -3.0
+
+
+def test_compound_modal_motion_line():
+    # CTR pipeline emits "G90 G1 X.. Y.." on a single line
+    moves = parse_text("G90 G1 X1.5 Y2.0 F60\n")
+    assert len(moves) == 1
+    assert moves[0].cmd == "G1"
+    assert moves[0].x == 1.5
+    assert moves[0].y == 2.0
+    assert moves[0].f == 60.0

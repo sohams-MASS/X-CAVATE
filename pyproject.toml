@@ -32,6 +32,7 @@ markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 [tool.pyright]
 include = ["xcavate", "tests"]
 extraPaths = ["."]
+pythonVersion = "3.11"
 
 [tool.setuptools.packages.find]
 include = ["xcavate*"]
