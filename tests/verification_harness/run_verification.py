@@ -42,9 +42,13 @@ def _prepare_cwd(case_dir: Path, pipeline: Pipeline) -> Path:
 
 
 def run_one(case: Case, pipeline: Pipeline, case_dir: Path, *, timeout: int) -> PipelineResult:
+    import os
     wd = _prepare_cwd(case_dir, pipeline)
     argv = pipeline.invocation + pipeline.build_args(case, CANONICAL_PARAMS)
     log_path = wd / "run.log"
+    env = os.environ.copy()
+    if pipeline.env_overrides:
+        env.update(pipeline.env_overrides)
     try:
         proc = subprocess.run(
             argv,
@@ -52,6 +56,7 @@ def run_one(case: Case, pipeline: Pipeline, case_dir: Path, *, timeout: int) -> 
             timeout=timeout,
             capture_output=True,
             check=False,
+            env=env,
         )
     except subprocess.TimeoutExpired as e:
         log_path.write_text(f"TIMEOUT after {timeout}s\nstderr:\n{(e.stderr or b'').decode(errors='replace')}\n")

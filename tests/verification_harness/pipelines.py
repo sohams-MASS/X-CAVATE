@@ -25,6 +25,9 @@ class Case:
     slug: str
 
 
+XCAVATE_REPO = Path("/Users/sohams/X-CAVATE")
+
+
 @dataclass
 class Pipeline:
     name: str
@@ -32,6 +35,7 @@ class Pipeline:
     invocation: list[str]
     build_args: Callable[["Case", dict], list[str]]
     locate_gcode: Callable[[Path, "Case"], list[Path]]
+    env_overrides: dict[str, str] | None = None
 
 
 CANONICAL_PARAMS: dict = {
@@ -212,9 +216,12 @@ PIPELINES: list[Pipeline] = [
     ),
     Pipeline(
         name="main",
-        label="sohams-MASS/X-CAVATE main",
+        label="sohams-MASS/X-CAVATE main (local source)",
         invocation=["python", "-m", "xcavate"],
         build_args=build_args_main,
         locate_gcode=_locate_modern,
+        # Force python to import from the local repo, not the installed
+        # `xcavate-toolpath` package that may shadow it in site-packages.
+        env_overrides={"PYTHONPATH": str(XCAVATE_REPO)},
     ),
 ]

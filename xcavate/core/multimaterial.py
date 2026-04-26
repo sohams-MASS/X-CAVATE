@@ -32,6 +32,11 @@ def classify_passes_by_material(
     classification = {}
     for i in print_passes:
         nodes = print_passes[i]
+        if not nodes:
+            # Empty sub-passes can survive _subdivide_by_material slicing.
+            # They emit no g-code, so material label is moot — default venous.
+            classification[i] = 0
+            continue
         if len(nodes) > 1:
             # Use last node to match original algorithm behavior
             artven = points[nodes[-1], 4]
