@@ -9,9 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-X1130_SCRIPT = Path(
-    "/Users/sohams/X-CAVATE/.claude/worktrees/serene-proskuriakova/xcavate_11_30_25.py"
-)
+X1130_SCRIPT = Path(__file__).parent / "legacy_scripts" / "xcavate_11_30_25.py"
 
 _PATCHES = [
     # Line 4717: drops the `custom_gcode == 1` requirement on the

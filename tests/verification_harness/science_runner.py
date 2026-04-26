@@ -15,9 +15,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-SCIENCE_SCRIPT = Path(
-    "/Users/sohams/Downloads/Copy of Xcavate used for Science paper 2/xcavate_Science.py"
-)
+SCIENCE_SCRIPT = Path(__file__).parent / "legacy_scripts" / "xcavate_Science.py"
 
 
 # Each tuple is (anchor_old, anchor_new). The anchor must be unique in the

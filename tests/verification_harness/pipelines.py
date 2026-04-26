@@ -9,14 +9,12 @@ from typing import Callable
 from .synth_io import synthesize_inletoutlet
 
 
-SCIENCE_SCRIPT = Path(
-    "/Users/sohams/Downloads/Copy of Xcavate used for Science paper 2/xcavate_Science.py"
-)
-X1130_SCRIPT = Path(
-    "/Users/sohams/X-CAVATE/.claude/worktrees/serene-proskuriakova/xcavate_11_30_25.py"
-)
-# In-tree wrappers that apply minimal in-memory patches to the legacy
-# scripts. See the runner files for the rationale on each patch.
+# Legacy scripts vendored in-repo for full reproducibility. Each is wrapped
+# by a runner that applies in-memory patches at exec time — see the runner
+# files (`science_runner.py`, `x1130_runner.py`) for the rationale on each
+# patch and the original commits where they landed.
+SCIENCE_SCRIPT = Path(__file__).parent / "legacy_scripts" / "xcavate_Science.py"
+X1130_SCRIPT = Path(__file__).parent / "legacy_scripts" / "xcavate_11_30_25.py"
 SCIENCE_RUNNER = Path(__file__).parent / "science_runner.py"
 X1130_RUNNER = Path(__file__).parent / "x1130_runner.py"
 
