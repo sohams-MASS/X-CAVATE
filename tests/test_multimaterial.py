@@ -35,16 +35,19 @@ class TestClassifyPassesByMaterial:
         assert result[0] == 0  # venous
         assert result[1] == 1  # arterial
 
-    def test_multinode_uses_last_node(self):
-        """Documented behavior: multi-node pass classified by its last node."""
+    def test_multinode_uses_second_node(self):
+        """Documented behavior matching xcavate_11_30_25.py line 4762:
+        multi-node pass is classified by its SECOND node (not the last).
+        Using the second node makes the classification stable against
+        material-outlier nodes at the tail of the pass."""
         points = _points_5col([
-            [0.0, 0.0, 0.0, 0.05, 0.0],  # venous
-            [1.0, 0.0, 0.0, 0.05, 0.0],  # venous
-            [2.0, 0.0, 0.0, 0.05, 1.0],  # arterial (last)
+            [0.0, 0.0, 0.0, 0.05, 1.0],  # arterial (first — ignored)
+            [1.0, 0.0, 0.0, 0.05, 0.0],  # venous (second — used)
+            [2.0, 0.0, 0.0, 0.05, 1.0],  # arterial (last — ignored)
         ])
         passes = {0: [0, 1, 2]}
         result = classify_passes_by_material(passes, points, num_columns=5)
-        assert result[0] == 1  # arterial (from last node)
+        assert result[0] == 0  # venous (from second node)
 
     def test_num_columns_below_5_returns_all_zero(self):
         points = _points_5col([

@@ -145,7 +145,18 @@ KNOWN_DELTAS: list[KnownDelta] = [
             "while x1130 is on a normal print move at X ≈ +103 — giving "
             "the characteristic ~206 mm `max_xyz_dev`. Functionally the "
             "same vessels are printed in both materials; main just switches "
-            "between printheads more often."
+            "between printheads more often.\n\n"
+            "Two algorithmic divergences in this path have been reconciled "
+            "with x1130 (with regression tests):\n"
+            "  • outlier-swap order in `_subdivide_by_material` is now "
+            "first → middle (cascading) → last\n"
+            "  • `classify_passes_by_material` now uses the **second** node "
+            "of each pass, matching `xcavate_11_30_25.py:4762`\n"
+            "Neither fix moved the +22 transition surplus on the 61-vessel "
+            "network, indicating a third difference remains (likely in the "
+            "post-subdivide reclassification or in how same-material "
+            "adjacent sub-passes are merged). Investigation paused; "
+            "residual is documented rather than chased further."
         ),
         applies=_mm,
     ),
