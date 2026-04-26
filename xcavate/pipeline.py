@@ -101,13 +101,8 @@ def run_xcavate(
         points_raw, inlets_raw, outlets_raw, config,
     )
 
-    inlet_nodes, outlet_nodes = match_inlet_outlet_nodes(
-        points, inlets, outlets,
-    )
-
     logger.info(
-        "Loaded network: %d points, %d vessels, %d inlets, %d outlets",
-        points.shape[0], len(coord_num_dict), len(inlet_nodes), len(outlet_nodes),
+        "Loaded network: %d points, %d vessels", points.shape[0], len(coord_num_dict),
     )
 
     # ── Step 2: Interpolate ──────────────────────────────────────────────
@@ -124,7 +119,19 @@ def run_xcavate(
     # Extract xyz for graph building (strip flag column)
     points_xyz = points_interp[:, :3].copy()
 
-    logger.info("Interpolated: %d -> %d points", points.shape[0], points_xyz.shape[0])
+    # Inlet/outlet matching MUST happen on the post-interpolation array,
+    # since `interpolate_network` densifies between original endpoints and
+    # shifts every node's global index. Matching pre-interp would leave
+    # `_find_branchpoints` skipping the wrong nodes and producing spurious
+    # adjacency edges through the actual endpoint.
+    inlet_nodes, outlet_nodes = match_inlet_outlet_nodes(
+        points_xyz, inlets, outlets,
+    )
+
+    logger.info(
+        "Interpolated: %d -> %d points; %d inlets, %d outlets resolved post-interp",
+        points.shape[0], points_xyz.shape[0], len(inlet_nodes), len(outlet_nodes),
+    )
 
     # ── Step 3: Build graph ──────────────────────────────────────────────
     _progress(3, "Building adjacency graph and detecting branchpoints")
@@ -403,33 +410,34 @@ def _subdivide_by_material(
     if num_columns < 5:
         return
 
-    # Swap outlier artven values at pass boundaries and write back to points
+    # Per-pass-local artven dictionary. We must NOT write swapped values back
+    # to `points` because branchpoint nodes appear in multiple passes; a swap
+    # in pass A would otherwise leak into pass B and shift its classification.
+    # x1130 (xcavate_11_30_25.py) maintains a separate `print_passes_processed_artven`
+    # dict for exactly this reason.
+    artven_local: Dict[int, List[int]] = {}
     for i in list(print_passes.keys()):
         nodes = print_passes[i]
-        if len(nodes) < 3:
-            continue
         artven = [int(points[n, 4]) for n in nodes]
-        # Swap first node if it disagrees with the next two
-        if artven[1] == artven[2] and artven[0] != artven[1]:
-            artven[0] = artven[1]
-        # Swap last node if it disagrees with the previous two
-        if artven[-2] == artven[-3] and artven[-1] != artven[-2]:
-            artven[-1] = artven[-2]
-        # Swap interior nodes surrounded by same type
-        for j in range(1, len(artven) - 1):
-            if artven[j - 1] == artven[j + 1] and artven[j] != artven[j - 1]:
-                artven[j] = artven[j - 1]
-        # Write swapped values back so break point detection uses them
-        for j, n in enumerate(nodes):
-            points[n, 4] = artven[j]
+        if len(nodes) >= 3:
+            # Swap outliers in order: first → middle (cascading) → last.
+            # Last-node check MUST run after middle loop to see cascades.
+            if artven[1] == artven[2] and artven[0] != artven[1]:
+                artven[0] = artven[1]
+            for j in range(1, len(artven) - 1):
+                if artven[j - 1] == artven[j + 1] and artven[j] != artven[j - 1]:
+                    artven[j] = artven[j - 1]
+            if artven[-2] == artven[-3] and artven[-1] != artven[-2]:
+                artven[-1] = artven[-2]
+        artven_local[i] = artven
 
-    # Find material transition break points
+    # Find material transition break points using the local (swapped) artven
     break_points = {}
     for i in list(print_passes.keys()):
-        nodes = print_passes[i]
-        if len(nodes) < 3:
+        artven = artven_local[i]
+        if len(artven) < 3:
             continue
-        artven = [int(points[n, 4]) for n in nodes]
+        nodes = print_passes[i]
         breaks = []
         for j in range(1, len(artven)):
             if artven[j] != artven[j - 1]:

@@ -146,8 +146,15 @@ class GcodeWriter(ABC):
     ):
         """Shared pass iteration loop for all printer types."""
         gap_tracker = 0
+        seen_nonempty = False
         for i in range(len(print_passes)):
-            for j_counter, j in enumerate(print_passes[i]):
+            nodes_i = print_passes[i]
+            if not nodes_i:
+                # Empty sub-passes can survive _subdivide_by_material slicing.
+                # They emit no g-code; skip without consuming the "first pass" slot.
+                continue
+            speed = self._f_speed(self.config.print_speed)
+            for j_counter, j in enumerate(nodes_i):
                 x = round(points[j, 0], nd)
                 y = round(points[j, 1], nd)
                 z = round(points[j, 2], nd)
@@ -158,20 +165,26 @@ class GcodeWriter(ABC):
                 if material_map is not None:
                     artven = material_map.get(i, 0)
 
-                if j_counter == 0 and i == 0:
+                if j_counter == 0 and not seen_nonempty:
                     self._write_first_pass_start(f, x, y, z, speed, artven)
                 elif j_counter == 0:
-                    prev_point = print_passes[i - 1][-1]
+                    # Walk back over any empty intermediate passes to find prev tip.
+                    prev_idx = i - 1
+                    while prev_idx >= 0 and not print_passes[prev_idx]:
+                        prev_idx -= 1
+                    prev_point = print_passes[prev_idx][-1]
                     prev_x = round(points[prev_point, 0], nd)
                     prev_y = round(points[prev_point, 1], nd)
                     # Adjust for gap extension overshoot on previous pass
-                    if gap_extensions and (i - 1) in gap_extensions:
-                        ext = gap_extensions[i - 1]
+                    if gap_extensions and prev_idx in gap_extensions:
+                        ext = gap_extensions[prev_idx]
                         prev_x = round(points[prev_point, 0] + ext.delta_x, nd)
                         prev_y = round(points[prev_point, 1] + ext.delta_y, nd)
                     self._write_pass_start(f, i, x, y, z, speed, artven, prev_x, prev_y)
                 else:
-                    self._write_move(f, j, j_counter, x, y, z, speed, points, nd, print_passes[i])
+                    self._write_move(f, j, j_counter, x, y, z, speed, points, nd, nodes_i)
+
+            seen_nonempty = True
 
             # Gap closure extension
             if gap_extensions and i in gap_extensions:

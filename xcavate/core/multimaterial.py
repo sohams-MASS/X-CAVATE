@@ -15,7 +15,12 @@ def classify_passes_by_material(
 ) -> Dict[int, int]:
     """Determine arterial (1) vs venous (0) classification for each pass.
 
-    Uses the artven column (column index 4) of the second node in each pass.
+    Uses the artven column (column index 4) of the **second node** in each
+    pass — matches xcavate_11_30_25.py line 4762. The second node (rather
+    than the first or last) is preferred because the first/last node can
+    occasionally be a material outlier near a branchpoint that the swap
+    step in `_subdivide_by_material` didn't fully smooth.
+
     For single-node passes, uses that node's value directly.
 
     Args:
@@ -32,9 +37,16 @@ def classify_passes_by_material(
     classification = {}
     for i in print_passes:
         nodes = print_passes[i]
+        if not nodes:
+            # Empty sub-passes can survive _subdivide_by_material slicing.
+            # They emit no g-code, so material label is moot — default venous.
+            classification[i] = 0
+            continue
         if len(nodes) > 1:
-            # Use last node to match original algorithm behavior
-            artven = points[nodes[-1], 4]
+            # Use the SECOND node (matches xcavate_11_30_25.py line 4762).
+            # Was previously `nodes[-1]` which contradicted the docstring and
+            # produced ~22 extra material transitions on the 61-vessel network.
+            artven = points[nodes[1], 4]
         else:
             artven = points[nodes[0], 4]
         classification[i] = 0 if artven == 0 else 1
