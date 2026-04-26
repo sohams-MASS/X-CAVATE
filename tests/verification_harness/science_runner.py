@@ -40,6 +40,19 @@ _PATCHES = [
         "with open('changelog.txt,' 'a') as f:",
         "with open('changelog.txt', 'a') as f:",
     ),
+    # Line ~766: unguarded graph[i].remove() in the daughter-pair dedup
+    # step. Same bug as x1130 (also at its line 878). On the 500-vessel
+    # network some daughter pairs are not connected in the first place,
+    # so the .remove() raises ValueError. Guard with `if in`.
+    (
+        "      if j != i:\n"
+        "        daughter_to_remove = j\n"
+        "        graph[i].remove(daughter_to_remove)",
+        "      if j != i:\n"
+        "        daughter_to_remove = j\n"
+        "        if daughter_to_remove in graph[i]:\n"
+        "          graph[i].remove(daughter_to_remove)",
+    ),
 ]
 
 
