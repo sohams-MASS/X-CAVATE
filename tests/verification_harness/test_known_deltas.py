@@ -36,6 +36,7 @@ def test_catalog_has_expected_ids():
         "dfs-extra-pass",
         "gap-closure-branchpoint-distribution",
         "mm-transition-count-divergence",
+        "branchpoint-tiebreak-large-network",
         "science-keyerror",
     }
     assert expected.issubset(ids)

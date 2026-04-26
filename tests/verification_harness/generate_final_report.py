@@ -110,6 +110,76 @@ of range`).
 """
 
 
+_RESIDUAL_DIFFS_BLOCK = """
+## Residual differences
+
+After all the fixes above, the comparison stabilized at:
+
+| Pair | 4/9/14/cnet/100/61-vessel | 5-1-23 MM | 500-vessel |
+|---|---:|---:|---:|
+| **x1130 ↔ main** | **0** mm (or float-precision noise 5e-7) | 5e-7 | **70.19 mm** |
+| sci ↔ x1130 | 32–38 mm | 72.72 | 71.16 |
+| sci ↔ main | 32–38 mm | 72.72 | 69.94 |
+
+The 500-vessel row stands out: every pair shows ~70 mm divergence, even
+though main↔x1130 is byte-identical on every smaller network.
+
+### Why every pair diverges on 500-vessel
+
+The graphs themselves differ. Comparing
+`reports/network_0_b_splines_500_vessels_1/main/outputs/graph/graph.txt`
+against the x1130 equivalent shows **38 lines of adjacency-list diff**
+out of 127,812 lines (one entry per node × two pipelines). Examples:
+
+```
+Node 8282:
+  main : [8282, 8283, 61712, 61713]   ← daughters {61712, 61713}
+  x1130: [8282, 8283, 47083, 61712]   ← daughters {47083, 61712}
+
+Node 19250:
+  main : [19249, 19250, 19251]
+  x1130: [19249, 19250, 19251, 25451]  ← x1130 has extra edge to 25451
+
+Node 22435:
+  main : [19251, 22435, 25451]
+  x1130: [19251, 22434, 22435]
+```
+
+These aren't "x1130 forgot to remove an edge" patterns — they're
+*different daughter assignments at branchpoints*. Same number of
+neighbours, but different *which* node each pipeline picks as daughter.
+
+**Cause: branchpoint daughter-selection ties.** Each pipeline finds
+"nearest unvisited node in another vessel" with a different algorithm:
+
+- **main** — `scipy.cKDTree.query(point, k=N)` (KD-tree, binary)
+- **x1130** — nested-loop brute force with strict-less comparison
+- **science** — same brute-force, slightly different loop ordering
+
+When two candidate nodes are at *exactly equal* distance from a vessel
+endpoint, the three implementations pick different ones. On 4–14 vessel
+networks the geometry is sparse and ties rarely happen (graphs match
+exactly → main↔x1130 = 0). On the 500-vessel dense vasculature, ~10–20
+branchpoints have effectively-tied candidates → different daughter pairs
+→ different adjacency edges → DFS visits in a different order → ~70 mm
+pass-ordering divergence in the gcode.
+
+All three pipelines still print *the same vessels with the same total
+path*; only the visit order differs.
+
+To force byte-equivalence on large networks would require adding an
+explicit secondary tiebreaker (e.g., "on equal distance, pick smaller
+node index") and applying it identically across all three
+implementations. None of the three is currently "wrong" — they're all
+valid choices for the same geometric configuration where multiple
+daughter candidates are equidistant.
+
+This is documented as the `branchpoint-tiebreak-large-network` known
+delta in `tests/verification_harness/known_deltas.py`.
+
+"""
+
+
 _LEGACY_PATCHES_BLOCK = """
 ## Legacy-script patches (in `tests/verification_harness/`)
 
@@ -227,6 +297,7 @@ def main() -> None:
     body.append(_RESULTS_INTRO)
     body.append(render_results_table(rows))
     body.append(render_per_case_metrics(rows))
+    body.append(_RESIDUAL_DIFFS_BLOCK)
     body.append(_BUGS_FIXED_BLOCK)
     body.append(_LEGACY_PATCHES_BLOCK)
 

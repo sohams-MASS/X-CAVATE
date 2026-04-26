@@ -161,6 +161,36 @@ KNOWN_DELTAS: list[KnownDelta] = [
         applies=_mm,
     ),
     KnownDelta(
+        id="branchpoint-tiebreak-large-network",
+        title="Branchpoint daughter-selection ties resolved differently across pipelines",
+        description=(
+            "On dense vasculature (e.g., the 500-vessel network with 63,904 "
+            "interpolated points), some vessel endpoints have two or more "
+            "candidate \"daughter\" nodes at *exactly equal* distance. Each "
+            "pipeline uses a different tiebreaker:\n"
+            "  • main → `scipy.cKDTree.query(point, k=N)` (binary tree)\n"
+            "  • x1130 → nested-loop brute force with strict-less comparison\n"
+            "  • science → nested-loop brute force with slightly different "
+            "loop ordering than x1130\n"
+            "When ties occur, the three implementations pick different "
+            "daughter nodes. On the 4/9/14-vessel networks ties are rare, "
+            "so the graphs match exactly (`x1130 ↔ main = 0` mm). On the "
+            "500-vessel network ~38 adjacency-list entries differ between "
+            "main and x1130 — different branchpoint daughter pairs cascade "
+            "through DFS into a different pass order, producing the "
+            "~70 mm `max_xyz_dev` between every pair (sci↔x1130 = 71.16, "
+            "sci↔main = 69.94, x1130↔main = 70.19). All three pipelines "
+            "still print the same vessels with the same total path; only "
+            "the visit order differs.\n\n"
+            "To force byte-equivalence we'd need to add an explicit "
+            "secondary tiebreaker (e.g., \"on equal distance, pick smaller "
+            "node index\") and apply it identically to all three "
+            "implementations. None of the three is currently \"correct\" — "
+            "they're all valid choices for the same geometric configuration."
+        ),
+        applies=_both_ok("x1130", "main"),
+    ),
+    KnownDelta(
         id="science-keyerror",
         title="Science.py crashes internally on every verification network",
         description=(

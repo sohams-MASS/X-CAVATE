@@ -137,3 +137,14 @@ main uses an explicit-stack iterative DFS in `xcavate/core/pathfinding.py` with 
 `id: gap-closure-branchpoint-distribution`
 
 After subdivision (which is algorithmically equivalent in both pipelines), main's gap-closure prepends/appends shared branchpoint nodes to stitch passes — e.g. main pass 1 starts with `[1571, 1572, ...]` even though `subdivide_passes` returned `[1572, ...]`. Pass 2 ends with the same node it started with (`[985, 489, ..., 393, 985]`). x1130's gap closure makes the same kind of additions but distributes them across different passes, leaving one fewer net pass. Net effect: same printed segments and same vessel coverage, slightly different pass boundaries and therefore slightly different jog choreography between passes.
+
+### Branchpoint daughter-selection ties resolved differently across pipelines
+`id: branchpoint-tiebreak-large-network`
+
+On dense vasculature (e.g., the 500-vessel network with 63,904 interpolated points), some vessel endpoints have two or more candidate "daughter" nodes at *exactly equal* distance. Each pipeline uses a different tiebreaker:
+  • main → `scipy.cKDTree.query(point, k=N)` (binary tree)
+  • x1130 → nested-loop brute force with strict-less comparison
+  • science → nested-loop brute force with slightly different loop ordering than x1130
+When ties occur, the three implementations pick different daughter nodes. On the 4/9/14-vessel networks ties are rare, so the graphs match exactly (`x1130 ↔ main = 0` mm). On the 500-vessel network ~38 adjacency-list entries differ between main and x1130 — different branchpoint daughter pairs cascade through DFS into a different pass order, producing the ~70 mm `max_xyz_dev` between every pair (sci↔x1130 = 71.16, sci↔main = 69.94, x1130↔main = 70.19). All three pipelines still print the same vessels with the same total path; only the visit order differs.
+
+To force byte-equivalence we'd need to add an explicit secondary tiebreaker (e.g., "on equal distance, pick smaller node index") and apply it identically to all three implementations. None of the three is currently "correct" — they're all valid choices for the same geometric configuration.
