@@ -28,33 +28,36 @@ def _points_from_artven(artven_seq):
     return arr
 
 
-def test_alternating_VAVA_propagates_to_last():
-    """Pass [V, A, V, A]: cascading middle swaps must reach the last node.
+def test_alternating_VAVA_propagation_prevents_spurious_split():
+    """Pass [A, V, A, V]: with cascading swap order (first → middle → last),
+    the local artven becomes uniform [A, A, A, A], no transitions are
+    detected, and the pass stays as one. Pre-fix order ran the last-node
+    swap before middle-node propagation, so artven[-3] was still V at the
+    last-node check — no swap fired — and a spurious break was created at
+    the tail. This is the cascade case from `xcavate_11_30_25.py`'s
+    single-pass loop over j=0..last.
 
-    Step-by-step expected:
-      0. Original artven    : [V, A, V, A]
-      1. j=0 swap            : artven[1] != artven[2] (A != V) -> no swap
-      2. j=1 (middle) swap   : artven[0]==artven[2]==V, artven[1]=A != V
-                               -> artven[1] = V       => [V, V, V, A]
-      3. j=2 (middle) swap   : artven[1]==artven[3]? V==A no
-                               -> no swap              => [V, V, V, A]
-      4. j=last swap         : artven[-2]==artven[-3]==V (after step 2!),
-                               artven[-1]=A != V
-                               -> artven[-1] = V       => [V, V, V, V]
-
-    main's pre-fix order ran step 4 before step 2, so artven[-3] was still A
-    at the time of the last-node check, the condition (artven[-2] == artven[-3])
-    failed, and the last swap was skipped. Result was [V, V, V, A] with a
-    spurious A→V transition at the tail.
+    Note: the swap is per-pass-local now and does NOT mutate `points`.
+    We verify the OUTCOME (no split) rather than `points[n, 4]`.
     """
-    points = _points_from_artven([1, 0, 1, 0])  # V=0, A=1
+    # [A, V, A, V] with values 1=arterial, 0=venous
+    points = _points_from_artven([1, 0, 1, 0])
     passes = {0: [0, 1, 2, 3]}
     _subdivide_by_material(passes, {0: 1}, points, num_columns=5)
-    final_artven = [int(points[n, 4]) for n in range(4)]
-    assert final_artven == [1, 1, 1, 1], (
-        f"swap order regression: expected [1,1,1,1] after cascading middle + "
-        f"last swaps, got {final_artven}. Last-node swap must run after the "
-        f"middle-node swap loop."
+    # After cascading swap the locally-smoothed artven is uniform [A,A,A,A]
+    # so no break point is detected and the pass stays whole.
+    assert list(passes.keys()) == [0], (
+        f"cascading swap should produce uniform local artven and avoid any "
+        f"break point — pass should stay as one. Got {len(passes)} passes."
+    )
+    assert passes[0] == [0, 1, 2, 3]
+    # And `points` must NOT have been mutated — the swap is per-pass-local.
+    original_artven = [1, 0, 1, 0]
+    actual = [int(points[n, 4]) for n in range(4)]
+    assert actual == original_artven, (
+        f"swap must NOT write back to `points`. Original {original_artven}, "
+        f"after subdivide call: {actual}. The mutation would leak to other "
+        f"passes containing the same branchpoint nodes."
     )
 
 
@@ -65,6 +68,38 @@ def test_clean_pass_no_swap_no_split():
     _subdivide_by_material(passes, {0: 1}, points, num_columns=5)
     assert list(passes.keys()) == [0]
     assert passes[0] == [0, 1, 2, 3, 4]
+
+
+def test_swap_does_not_leak_across_passes():
+    """A branchpoint node shared between two passes must NOT have its
+    swapped artven value written back to `points`. If pass A swaps the
+    branchpoint from V to A, pass B (which contains the same node) must
+    still see the ORIGINAL V when it does its own break detection.
+
+    x1130 keeps swap state per-pass-local in `print_passes_processed_artven`;
+    main was previously writing swapped values back to `points[n, 4]` and
+    leaking the mutation into other passes. That cross-pass leakage was the
+    dominant driver of the +22 transition surplus on the 61-vessel network.
+    """
+    # Branchpoint node 5 has artven=0 (venous). It appears in both pass 0
+    # (where the swap fires and would mutate it to 1) and pass 1 (where its
+    # original value of 0 must still be read).
+    points = _points_from_artven([1, 0, 1, 0, 0, 0, 1, 1])
+    # Pass 0: nodes [0,1,2] — alternating triple [1,0,1] → swap fires:
+    #         middle j=1 with prev[0]==next[2]==1, curr=0 → swap to 1
+    #         result [1,1,1] (in local artven only).
+    # Pass 1: nodes [5,6,7] — values [0,1,1] (post-swap-step does nothing
+    #         since the only middle node has prev != next).
+    passes = {0: [0, 1, 2], 1: [5, 6, 7]}
+    _subdivide_by_material(passes, {0: 1, 1: 1}, points, num_columns=5)
+    # The shared node hasn't moved between passes here; the test is that
+    # `points[1, 4]` is NOT mutated to 1 even though pass 0's local swap set
+    # the local artven[1] = 1.
+    assert int(points[1, 4]) == 0, (
+        f"swap leaked back into points: points[1, 4] = {int(points[1, 4])}, "
+        f"expected 0 (original venous value). Per-pass swap state must stay "
+        f"local — never write back to the shared `points` array."
+    )
 
 
 def test_real_transition_does_split():

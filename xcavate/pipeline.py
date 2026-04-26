@@ -410,34 +410,34 @@ def _subdivide_by_material(
     if num_columns < 5:
         return
 
-    # Swap outlier artven values at pass boundaries and write back to points
+    # Per-pass-local artven dictionary. We must NOT write swapped values back
+    # to `points` because branchpoint nodes appear in multiple passes; a swap
+    # in pass A would otherwise leak into pass B and shift its classification.
+    # x1130 (xcavate_11_30_25.py) maintains a separate `print_passes_processed_artven`
+    # dict for exactly this reason.
+    artven_local: Dict[int, List[int]] = {}
     for i in list(print_passes.keys()):
         nodes = print_passes[i]
-        if len(nodes) < 3:
-            continue
         artven = [int(points[n, 4]) for n in nodes]
-        # Order matches xcavate_11_30_25.py's single-pass loop over j=0..last:
-        # first → middle (in order, with cascading propagation) → last.
-        # The last-node check MUST run after the middle loop so it sees any
-        # cascaded swap that updated artven[-3].
-        if artven[1] == artven[2] and artven[0] != artven[1]:
-            artven[0] = artven[1]
-        for j in range(1, len(artven) - 1):
-            if artven[j - 1] == artven[j + 1] and artven[j] != artven[j - 1]:
-                artven[j] = artven[j - 1]
-        if artven[-2] == artven[-3] and artven[-1] != artven[-2]:
-            artven[-1] = artven[-2]
-        # Write swapped values back so break point detection uses them
-        for j, n in enumerate(nodes):
-            points[n, 4] = artven[j]
+        if len(nodes) >= 3:
+            # Swap outliers in order: first → middle (cascading) → last.
+            # Last-node check MUST run after middle loop to see cascades.
+            if artven[1] == artven[2] and artven[0] != artven[1]:
+                artven[0] = artven[1]
+            for j in range(1, len(artven) - 1):
+                if artven[j - 1] == artven[j + 1] and artven[j] != artven[j - 1]:
+                    artven[j] = artven[j - 1]
+            if artven[-2] == artven[-3] and artven[-1] != artven[-2]:
+                artven[-1] = artven[-2]
+        artven_local[i] = artven
 
-    # Find material transition break points
+    # Find material transition break points using the local (swapped) artven
     break_points = {}
     for i in list(print_passes.keys()):
-        nodes = print_passes[i]
-        if len(nodes) < 3:
+        artven = artven_local[i]
+        if len(artven) < 3:
             continue
-        artven = [int(points[n, 4]) for n in nodes]
+        nodes = print_passes[i]
         breaks = []
         for j in range(1, len(artven)):
             if artven[j] != artven[j - 1]:
