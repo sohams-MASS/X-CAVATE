@@ -104,7 +104,7 @@ def test_known_deltas_section_appears_when_case_provided(tmp_path):
     assert "## Known residual deltas" in md
     # multimaterial-specific deltas should appear for an MM case
     assert "x1130-mm-pressure-gate" in md
-    assert "mm-nozzle-axis-ordering" in md
+    assert "mm-transition-count-divergence" in md
 
 
 def test_known_deltas_section_omitted_when_no_case(tmp_path):

@@ -416,16 +416,17 @@ def _subdivide_by_material(
         if len(nodes) < 3:
             continue
         artven = [int(points[n, 4]) for n in nodes]
-        # Swap first node if it disagrees with the next two
+        # Order matches xcavate_11_30_25.py's single-pass loop over j=0..last:
+        # first → middle (in order, with cascading propagation) → last.
+        # The last-node check MUST run after the middle loop so it sees any
+        # cascaded swap that updated artven[-3].
         if artven[1] == artven[2] and artven[0] != artven[1]:
             artven[0] = artven[1]
-        # Swap last node if it disagrees with the previous two
-        if artven[-2] == artven[-3] and artven[-1] != artven[-2]:
-            artven[-1] = artven[-2]
-        # Swap interior nodes surrounded by same type
         for j in range(1, len(artven) - 1):
             if artven[j - 1] == artven[j + 1] and artven[j] != artven[j - 1]:
                 artven[j] = artven[j - 1]
+        if artven[-2] == artven[-3] and artven[-1] != artven[-2]:
+            artven[-1] = artven[-2]
         # Write swapped values back so break point detection uses them
         for j, n in enumerate(nodes):
             points[n, 4] = artven[j]
