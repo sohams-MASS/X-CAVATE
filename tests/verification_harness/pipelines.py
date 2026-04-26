@@ -15,6 +15,9 @@ SCIENCE_SCRIPT = Path(
 X1130_SCRIPT = Path(
     "/Users/sohams/X-CAVATE/.claude/worktrees/serene-proskuriakova/xcavate_11_30_25.py"
 )
+# Wrapper that patches x1130's multimaterial-pressure gate at runtime; see
+# tests/verification_harness/x1130_runner.py for the rationale.
+X1130_RUNNER = Path(__file__).parent / "x1130_runner.py"
 
 
 @dataclass
@@ -212,8 +215,8 @@ PIPELINES: list[Pipeline] = [
     ),
     Pipeline(
         name="x1130",
-        label="xcavate_11_30_25.py (Nov 2025)",
-        invocation=["python", str(X1130_SCRIPT)],
+        label="xcavate_11_30_25.py (Nov 2025) [MM-gate patched]",
+        invocation=["python", str(X1130_RUNNER)],
         build_args=build_args_x1130,
         locate_gcode=_locate_modern,
     ),
