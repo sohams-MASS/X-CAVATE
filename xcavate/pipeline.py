@@ -101,13 +101,8 @@ def run_xcavate(
         points_raw, inlets_raw, outlets_raw, config,
     )
 
-    inlet_nodes, outlet_nodes = match_inlet_outlet_nodes(
-        points, inlets, outlets,
-    )
-
     logger.info(
-        "Loaded network: %d points, %d vessels, %d inlets, %d outlets",
-        points.shape[0], len(coord_num_dict), len(inlet_nodes), len(outlet_nodes),
+        "Loaded network: %d points, %d vessels", points.shape[0], len(coord_num_dict),
     )
 
     # ── Step 2: Interpolate ──────────────────────────────────────────────
@@ -124,7 +119,19 @@ def run_xcavate(
     # Extract xyz for graph building (strip flag column)
     points_xyz = points_interp[:, :3].copy()
 
-    logger.info("Interpolated: %d -> %d points", points.shape[0], points_xyz.shape[0])
+    # Inlet/outlet matching MUST happen on the post-interpolation array,
+    # since `interpolate_network` densifies between original endpoints and
+    # shifts every node's global index. Matching pre-interp would leave
+    # `_find_branchpoints` skipping the wrong nodes and producing spurious
+    # adjacency edges through the actual endpoint.
+    inlet_nodes, outlet_nodes = match_inlet_outlet_nodes(
+        points_xyz, inlets, outlets,
+    )
+
+    logger.info(
+        "Interpolated: %d -> %d points; %d inlets, %d outlets resolved post-interp",
+        points.shape[0], points_xyz.shape[0], len(inlet_nodes), len(outlet_nodes),
+    )
 
     # ── Step 3: Build graph ──────────────────────────────────────────────
     _progress(3, "Building adjacency graph and detecting branchpoints")
