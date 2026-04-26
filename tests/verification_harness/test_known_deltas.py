@@ -35,7 +35,7 @@ def test_catalog_has_expected_ids():
         "x1130-mm-pressure-gate",
         "dfs-extra-pass",
         "gap-closure-branchpoint-distribution",
-        "mm-nozzle-axis-ordering",
+        "mm-transition-count-divergence",
         "science-keyerror",
     }
     assert expected.issubset(ids)
@@ -47,7 +47,7 @@ def test_mm_only_deltas_suppress_on_sm_case():
     section = format_for_case(case, results, {})
     # MM-only deltas must NOT appear
     assert "x1130-mm-pressure-gate" not in section
-    assert "mm-nozzle-axis-ordering" not in section
+    assert "mm-transition-count-divergence" not in section
     # universally-relevant deltas SHOULD appear
     assert "x1130-flow-override" in section
 
@@ -57,7 +57,7 @@ def test_mm_deltas_appear_on_mm_case():
     results = {"science": _fail("s"), "x1130": _ok("x"), "main": _ok("m")}
     section = format_for_case(case, results, {})
     assert "x1130-mm-pressure-gate" in section
-    assert "mm-nozzle-axis-ordering" in section
+    assert "mm-transition-count-divergence" in section
 
 
 def test_science_keyerror_only_when_science_failed():

@@ -128,17 +128,24 @@ KNOWN_DELTAS: list[KnownDelta] = [
         applies=_both_ok("x1130", "main"),
     ),
     KnownDelta(
-        id="mm-nozzle-axis-ordering",
-        title="Multimaterial nozzle-switch axis lift ordering",
+        id="mm-transition-count-divergence",
+        title="main emits more multimaterial transitions than x1130",
         description=(
-            "On material transitions, main lifts both axes together "
-            "(`G91 G1 A60 B60 F5`), then shuttles X by `±103`, then lowers "
-            "both together. x1130 lifts the active axis first by a small "
-            "amount (`G91 G1 A0.5 F0.25`), then both to clearance, then "
-            "shuttles. Same dwell zone, different per-axis micro-sequence. "
-            "This is the dominant source of MM-case `out_of_tol` counts even "
-            "after preamble alignment. Functionally equivalent — both end up "
-            "at the same physical state at the start of each new pass."
+            "On the 61-vessel multimaterial network main emits **205** "
+            "nozzle switches while x1130 emits **183** — an ~12% surplus. "
+            "The per-switch choreography is byte-identical between the two "
+            "pipelines (`G91 G1 A60 B60 F5 / G91 G1 X-103 F10 / "
+            "G91 G1 Y0.5 F5 / G91 G1 A-60 B-60`); only the **count** and "
+            "**positions** of switches differ. Cause: main's "
+            "`_subdivide_by_material` in `xcavate/pipeline.py` splits passes "
+            "at material transitions more aggressively than x1130's "
+            "Branchpoint-Condition analogue, producing extra "
+            "arterial↔venous flips. When the harness aligns the two streams "
+            "by index, at some row main is mid-shuttle (`G91 G1 X-103`) "
+            "while x1130 is on a normal print move at X ≈ +103 — giving "
+            "the characteristic ~206 mm `max_xyz_dev`. Functionally the "
+            "same vessels are printed in both materials; main just switches "
+            "between printheads more often."
         ),
         applies=_mm,
     ),
