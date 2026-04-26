@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .compare import DiffReport, Metrics
+from .known_deltas import format_for_case as _format_known_deltas
 
 
 @dataclass
@@ -42,6 +43,7 @@ def write_case_report(
     case_slug: str,
     results: dict,
     diffs: dict,
+    case=None,
 ) -> None:
     case_dir.mkdir(parents=True, exist_ok=True)
     out = case_dir / "report.md"
@@ -76,6 +78,11 @@ def write_case_report(
                     lines.append(f"        B: {rb}")
                 lines.append("```")
             lines.append("")
+
+    if case is not None:
+        deltas_section = _format_known_deltas(case, results, diffs)
+        if deltas_section:
+            lines.append(deltas_section)
 
     out.write_text("\n".join(lines))
 

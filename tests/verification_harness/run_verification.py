@@ -121,7 +121,7 @@ def run_case(case: Case, *, timeout: int) -> tuple[dict, dict]:
                 align_on_first_g1=True,
             )
 
-    write_case_report(case_dir, case.slug, results, diffs)
+    write_case_report(case_dir, case.slug, results, diffs, case=case)
     return results, diffs
 
 
