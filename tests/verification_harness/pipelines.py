@@ -15,8 +15,9 @@ SCIENCE_SCRIPT = Path(
 X1130_SCRIPT = Path(
     "/Users/sohams/X-CAVATE/.claude/worktrees/serene-proskuriakova/xcavate_11_30_25.py"
 )
-# Wrapper that patches x1130's multimaterial-pressure gate at runtime; see
-# tests/verification_harness/x1130_runner.py for the rationale.
+# In-tree wrappers that apply minimal in-memory patches to the legacy
+# scripts. See the runner files for the rationale on each patch.
+SCIENCE_RUNNER = Path(__file__).parent / "science_runner.py"
 X1130_RUNNER = Path(__file__).parent / "x1130_runner.py"
 
 
@@ -190,26 +191,38 @@ def build_args_main(case: Case, params: dict) -> list[str]:
 
 
 def _locate_science(cwd: Path, case: Case) -> list[Path]:
+    """Return Science.py gcode files, MM first for multimaterial cases."""
+    sm = cwd / "gcode.txt"
+    mm = cwd / "gcode_multimaterial.txt"
     candidates: list[Path] = []
-    for name in ("gcode.txt", "gcode_multimaterial.txt"):
-        p = cwd / name
-        if p.exists():
-            candidates.append(p)
+    if case.multimaterial and mm.exists():
+        candidates.append(mm)
+    if sm.exists():
+        candidates.append(sm)
+    if not case.multimaterial and mm.exists():
+        candidates.append(mm)
     return candidates
 
 
 def _locate_modern(cwd: Path, case: Case) -> list[Path]:
+    """Return modern-pipeline gcode files, MM first for multimaterial cases."""
     gcode_dir = cwd / "outputs" / "gcode"
     if not gcode_dir.exists():
         return []
-    return sorted(gcode_dir.glob("gcode_*.txt"))
+    files = sorted(gcode_dir.glob("gcode_*.txt"))
+    if case.multimaterial:
+        # Move any MM file to the front so [0] is the multimaterial output
+        mm_files = [p for p in files if "_MM_" in p.name]
+        sm_files = [p for p in files if "_MM_" not in p.name]
+        return mm_files + sm_files
+    return files
 
 
 PIPELINES: list[Pipeline] = [
     Pipeline(
         name="science",
-        label="xcavate_Science.py (Jun 2023)",
-        invocation=["python", str(SCIENCE_SCRIPT)],
+        label="xcavate_Science.py (Jun 2023) [logging bug patched]",
+        invocation=["python", str(SCIENCE_RUNNER)],
         build_args=build_args_science,
         locate_gcode=_locate_science,
     ),
